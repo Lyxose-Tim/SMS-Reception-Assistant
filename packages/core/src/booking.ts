@@ -58,7 +58,7 @@ function escapeRegExp(text: string): string {
 
 export function matchService(text: string, services: ServiceItem[]): string | null {
   const lower = text.toLowerCase().trim();
-  const numbered = /^(\d{1,2})$/.exec(lower);
+  const numbered = /^(?:(?:service|option|number|no\.?|#)\s*)?(\d{1,2})$/.exec(lower);
   if (numbered) {
     const picked = services[Number(numbered[1]) - 1]?.name;
     return picked?.trim() ? picked : null;

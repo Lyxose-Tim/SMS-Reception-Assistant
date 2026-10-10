@@ -409,3 +409,48 @@ describe('respondWithRules: unpunctuated topic questions inside a draft', () => 
     expect(out.replies.at(-1)).toBe('Could you share your name?');
   });
 });
+
+describe('respondWithRules: answers to the awaited service field are not topic questions', () => {
+  const awaitingService = (): BookingDraft => ({
+    fields: {},
+    awaiting: 'service',
+    updatedAt: now.toISOString(),
+  });
+
+  it('stores "service 2" as the second service and asks for the time', () => {
+    const out = respondWithRules(k, 'service 2', 'en', awaitingService(), now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning' });
+    expect(out.bookingDraft?.awaiting).toBe('preferred_time');
+    expect(out.replies).toEqual(['Could you share your preferred date and time?']);
+  });
+
+  it('stores "deep cleaning service"', () => {
+    const out = respondWithRules(k, 'deep cleaning service', 'en', awaitingService(), now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning' });
+    expect(out.bookingDraft?.awaiting).toBe('preferred_time');
+  });
+
+  it('stores a short "deep service" (12 chars, contains the services keyword)', () => {
+    const out = respondWithRules(k, 'deep service', 'en', awaitingService(), now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning' });
+  });
+
+  it('stores "standard service please"', () => {
+    const out = respondWithRules(k, 'standard service please', 'en', awaitingService(), now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Standard cleaning' });
+  });
+
+  it('still treats "What services do you offer?" as a question and stores nothing', () => {
+    const out = respondWithRules(k, 'What services do you offer?', 'en', awaitingService(), now);
+    expect(out.replies[0]).toContain('Deep cleaning (');
+    expect(out.replies.at(-1)).toMatch(/^Which service/);
+    expect(out.bookingDraft?.fields).toEqual({});
+    expect(out.bookingDraft?.awaiting).toBe('service');
+  });
+
+  it('still treats a bare "price" as a question while awaiting the service', () => {
+    const out = respondWithRules(k, 'price', 'en', awaitingService(), now);
+    expect(out.replies[0]).toContain('Deep cleaning: Starting at $220');
+    expect(out.bookingDraft?.fields).toEqual({});
+  });
+});

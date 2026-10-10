@@ -45,6 +45,9 @@ describe('matchService', () => {
     expect(matchService('a deep clean', services)).toBe('Deep cleaning');
     expect(matchService('move-out', services)).toBe('Move-out cleaning');
     expect(matchService('2', services)).toBe('Deep cleaning');
+    expect(matchService('service 2', services)).toBe('Deep cleaning');
+    expect(matchService('Option 2', services)).toBe('Deep cleaning');
+    expect(matchService('#2', services)).toBe('Deep cleaning');
   });
 
   it('returns null when nothing or an out-of-range number matches', () => {

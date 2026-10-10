@@ -11,6 +11,7 @@ import {
 import { t, type TemplateKey } from '../templates';
 import type {
   BookingDraft,
+  BookingFieldDef,
   BookingRequestDraft,
   BusinessKnowledge,
   BusinessProfile,
@@ -63,7 +64,7 @@ export function respondWithRules(
     const awaited = k.bookingFields.find((d) => d.key === draft.awaiting) ?? nextMissingField(k.bookingFields, draft);
     const ask = awaited ? [askFor(awaited, locale, services)] : [];
     if (c.isPleasantry) return { replies: ask, bookingDraft: refreshed(draft, now) };
-    if (isDraftQuestion(text, c, awaited?.key)) {
+    if (isDraftQuestion(text, c, awaited)) {
       const answer = answerQuestion(k, text, c, locale);
       return { replies: [answer ?? t(locale, 'booking_question_unanswered'), ...ask], bookingDraft: refreshed(draft, now) };
     }
@@ -84,11 +85,19 @@ const EXPLICIT_CANCEL = /\bcancel\b|取消/i;
 /** Text this short that names a topic ("price", "多少钱") is a question even without punctuation. */
 const SHORT_TEXT_CHARS = 12;
 
+/** Topics whose keywords naturally occur in a plain answer to the awaited field, so they alone don't make it a question. */
+function answerTopics(def: BookingFieldDef | null | undefined): Topic[] {
+  if (!def) return [];
+  if (def.kind === 'service') return ['services']; // "deep cleaning service", "service 2"
+  if (def.key === 'preferred_time') return ['hours']; // "周六几点都可以"
+  return [];
+}
+
 /** Inside a draft, decides whether a message is a visitor question (answer + re-ask) rather than a field value. */
-function isDraftQuestion(text: string, c: Classification, awaitedKey: string | undefined): boolean {
+function isDraftQuestion(text: string, c: Classification, awaited: BookingFieldDef | null | undefined): boolean {
   if (isExplicitQuestion(text)) return true;
-  // "周六几点都可以" answers the preferred_time prompt: an hours keyword alone does not make it a question.
-  const topics = c.topics.filter((topic) => !(topic === 'hours' && awaitedKey === 'preferred_time'));
+  const own = answerTopics(awaited);
+  const topics = c.topics.filter((topic) => !own.includes(topic));
   if (topics.length > 0 && (c.isQuestion || text.trim().length <= SHORT_TEXT_CHARS)) return true;
   // "怎么取消" / "how to cancel": a question about cancelling, never a field value.
   return c.wantsCancel && c.isQuestion;
