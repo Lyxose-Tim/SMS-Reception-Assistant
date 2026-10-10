@@ -1,0 +1,2 @@
+# Tested official SDK for signatures and REST transport; live E2E unverified.
+twilio==9.11.2

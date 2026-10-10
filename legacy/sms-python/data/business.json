@@ -1,0 +1,17 @@
+{
+  "name": "Harbor & Home Cleaning",
+  "hours": "Monday–Friday, 8:00 AM–6:00 PM; Saturday, 9:00 AM–1:00 PM; closed Sunday (business local time)",
+  "service_areas": ["Oakwood", "Riverside", "Maple Heights"],
+  "services": [
+    {"name": "Standard cleaning", "description": "Routine cleaning of kitchens, bathrooms and living areas.", "pricing": "Starting at $120. The owner must review property details before confirming a quote."},
+    {"name": "Deep cleaning", "description": "More detailed cleaning for kitchens, bathrooms and high-touch areas.", "pricing": "Starting at $220. The owner must review property details before confirming a quote."},
+    {"name": "Move-out cleaning", "description": "Cleaning for an empty property at the end of a tenancy.", "pricing": "Owner quote required after property details are reviewed."}
+  ],
+  "price_note": "Starting prices are illustrative estimates, not confirmed quotes. Availability and all appointment requests require owner confirmation.",
+  "contact_email": "hello@harborclean.example.test",
+  "contact_phone": "+12025550190",
+  "sending_enabled": true,
+  "max_messages_per_hour": 8,
+  "model_mode": "rules",
+  "model_timeout_seconds": 1.0
+}

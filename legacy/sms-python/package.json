@@ -1,0 +1,1 @@
+{"name":"sms-reception-demo","private":true,"scripts":{"dev":"sh scripts/preview.sh"}}

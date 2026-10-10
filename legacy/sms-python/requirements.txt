@@ -1,0 +1,2 @@
+# The local demo and core tests use only the Python 3.12 standard library.
+# Optional Twilio intake verification: see requirements-twilio.txt.

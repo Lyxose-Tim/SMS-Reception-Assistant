@@ -1,0 +1,40 @@
+async (page) => {
+  const checks = [];
+  const ensure = (value, label) => { if (!value) throw new Error(label); checks.push(label); };
+  const state = () => page.evaluate(async () => (await fetch('/api/state')).json());
+  await page.getByRole('button', {name: 'Refresh workspace'}).click();
+  const current = await state();
+  ensure(current.appointments.length === 2 && current.appointments.every(item => item.status === 'pending_owner_confirmation'), 'Both independent appointment requests remain pending');
+  const second = current.appointments.find(item => item.service === 'Standard cleaning');
+  ensure(second.area === 'Oakwood' && second.desired_time === 'next Monday 10am' && second.contact === 'new.synthetic@example.test', 'Second request uses newly collected area/time/contact');
+  ensure(Object.keys(current.contacts.find(item => item.phone === '+12025550813').booking).length === 0, 'Submitted second request closes its draft');
+  ensure(current.outbox.items.some(item => item.phone === '+12025550811' && item.body === 'UI approved request rules: every appointment request needs owner confirmation.'), 'Edited fifth FAQ is the actual new reply');
+  ensure(current.contacts.find(item => item.phone === '+12025550811').booking && Object.keys(current.contacts.find(item => item.phone === '+12025550811').booking).length === 0, 'Request-rule FAQ creates no booking draft');
+  ensure(current.contacts.find(item => item.phone === '+12025550812').consent_status === 'revoked' && current.outbox.items.filter(item => item.phone === '+12025550812').every(item => item.status === 'canceled'), 'STOP after review revokes permission and cancels the human queue');
+  await page.getByRole('button', {name: 'Appointment requests', exact: true}).click();
+  ensure((await page.locator('#view-appointments').innerText()).includes('Oakwood'), 'Appointment UI displays the independently collected location');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({path: 'D:/SMS Reception Assistant/output/playwright/07-two-pending-requests.png', fullPage: true});
+  await page.getByRole('button', {name: 'Consent records', exact: true}).click();
+  ensure((await page.locator('#view-consent').innerText()).includes('Synthetic Insurance'), 'Consent history UI includes the reviewed then opted-out customer');
+  await page.screenshot({path: 'D:/SMS Reception Assistant/output/playwright/08-consent-history.png', fullPage: true});
+  await page.getByRole('button', {name: /Inbox/}).click();
+  await page.getByRole('button', {name: 'Open conversation with Synthetic Insurance'}).click();
+  ensure(await page.getByRole('button', {name: 'Team reply', exact: true}).isDisabled(), 'New STOP is reflected in the formerly reviewed conversation UI');
+  const csrf = await page.evaluate(async () => {
+    const result = await fetch('/api/handoff', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Demo-Token': 'invalid-synthetic-csrf'}, body: JSON.stringify({phone: '+12025550812', active: false})});
+    return {status: result.status, body: await result.json()};
+  });
+  ensure(csrf.status === 403, 'Invalid CSRF is rejected for the logged-in browser');
+  const metadata = await page.evaluate(() => ({user_agent: navigator.userAgent, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone}));
+  await page.getByRole('button', {name: 'Sign out', exact: true}).click();
+  await page.getByRole('textbox', {name: 'Operator password'}).waitFor({state: 'visible'});
+  ensure(await page.evaluate(() => document.body.classList.contains('auth-loading')), 'Logout restores the sign-in gate');
+  ensure(await page.evaluate(async () => (await fetch('/api/state')).status) === 401, 'Logged-out browser cannot read customer state');
+  await page.getByRole('textbox', {name: 'Operator password'}).fill('wrong synthetic password');
+  await page.getByRole('button', {name: 'Sign in', exact: true}).click();
+  await page.locator('#login-error').waitFor({state: 'visible'});
+  ensure((await page.locator('#login-error').innerText()).length > 0, 'Failed login displays a readable error');
+  await page.screenshot({path: 'D:/SMS Reception Assistant/output/playwright/09-logout-and-login-error.png', fullPage: true});
+  return {phase: 3, passed: checks.length, checks, metadata, real_sending_enabled: false};
+}

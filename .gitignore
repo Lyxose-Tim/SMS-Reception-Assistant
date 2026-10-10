@@ -1,0 +1,32 @@
+# dependencies / builds
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+
+# runtime data & secrets
+data/*.db
+data/*.db-*
+*.sqlite3
+*.sqlite3-*
+*.lock
+.env
+.env.*
+!.env.example
+
+# legacy generated artifacts (kept on disk, not tracked)
+legacy/sms-python/.venv/
+legacy/sms-python/runtime/
+legacy/sms-python/artifacts/
+legacy/sms-python/output/
+legacy/sms-python/.playwright-cli/
+legacy/sms-python/migration-evidence/
+__pycache__/
+*.pyc
+
+# tooling
+.playwright-cli/
+test-results/
+playwright-report/
+.DS_Store
+Thumbs.db

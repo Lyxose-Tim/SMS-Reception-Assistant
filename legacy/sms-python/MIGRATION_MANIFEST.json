@@ -1,0 +1,681 @@
+{
+  "generated_at_utc": "2026-10-09T23:50:58.915193+00:00",
+  "source_delivery_reference": "2026-10-09 16:14 (delegated handoff)",
+  "target": "D:\\SMS Reception Assistant",
+  "source": "E:\\Lyxose\\Documents\\harbor-home-sms-reception-demo.zip",
+  "source_bytes": 1253640,
+  "source_sha256": "0b51df0a0c4cc7959b399f4786a966432d1d0fbb6537639db985df8449733f0c",
+  "flattened_root": "sms-reception-demo",
+  "existing_top_level": [],
+  "source_files": 64,
+  "source_payload_bytes": 1954967,
+  "excluded_files": 0,
+  "new_files": 64,
+  "identical_existing_files": 0,
+  "source_preserved": true,
+  "all_source_files_verified": true,
+  "native_plan_submission": {
+    "observed_at_utc": "2026-10-09T23:55:41.652625+00:00",
+    "project": "SMS Reception Assistant",
+    "working_directory_confirmed_by_visible_ui": "D:\\SMS Reception Assistant",
+    "client": "user's local ChatGPT desktop application",
+    "execution_location": "在你的计算机上 (visible selected option)",
+    "mode": "native Plan / 计划",
+    "mode_activation": "composer + menu > 计划模式 / 开启计划模式; visible 计划 lightbulb chip",
+    "submission": "submitted_once_and_accepted",
+    "submitted_prompt_readback": "exact match, 1610/1610 characters including requested title and target directory",
+    "requested_task_name": "SMS Reception Assistant — 优化计划",
+    "actual_task_title": "SMS Reception Assistant — 优化计划",
+    "private_task_reference": "本机 ChatGPT > SMS Reception Assistant 项目 > SMS Reception Assistant — 优化计划",
+    "task_response_status": "已收到完整原生 Plan 回复，并原样保存为 PLAN_RESULT.md；界面停在未回答的“实施此计划？”处。没有批准或启动实施。",
+    "implementation_started_by_migration_task": false,
+    "evidence": [
+      {
+        "path": "D:\\SMS Reception Assistant\\migration-evidence\\project-path.png",
+        "bytes": 139500,
+        "sha256": "3b6678d380e3a0958e8dd0100d5e5c916f03e7601f4ba38a004aaca0de0f86cf"
+      },
+      {
+        "path": "D:\\SMS Reception Assistant\\migration-evidence\\native-plan-enabled.png",
+        "bytes": 134061,
+        "sha256": "90e97e5b8088c8f32fefb30163ff43b047e2eade73f462791e51ce84cbe6b560"
+      },
+      {
+        "path": "D:\\SMS Reception Assistant\\migration-evidence\\submitted.png",
+        "bytes": 199761,
+        "sha256": "b820ef22f14855efd16128c3a959177e2edac2f59440040a216ce5e6d9a0747d"
+      },
+      {
+        "path": "D:\\SMS Reception Assistant\\migration-evidence\\sms-plan-task-renamed.png",
+        "bytes": 328994,
+        "sha256": "b0a02e09a230270ea5d77041bc465fe250932beeca6b0b91d50c1579c973c078"
+      },
+      {
+        "path": "D:\\SMS Reception Assistant\\migration-evidence\\sms-plan-manual-service-assumption-selected.png",
+        "bytes": 294081,
+        "sha256": "a158a95c44a15d7db9885b0e327c1c34e4c8598db49d3ca27c9c8aa90aedf29a"
+      },
+      {
+        "path": "D:\\SMS Reception Assistant\\migration-evidence\\sms-plan-single-instance-assumption-selected.png",
+        "bytes": 288161,
+        "sha256": "47c3c18c95b4f29672d56f156c692819659c143cfdfc0836552ba87e66d9fa97"
+      },
+      {
+        "path": "D:\\SMS Reception Assistant\\migration-evidence\\sms-plan-completed-awaiting-approval.png",
+        "bytes": 240632,
+        "sha256": "23824d064ca36ff99266400a0e572b3e0ca62a3bdea0d2251b7213aa1a8c2834"
+      }
+    ],
+    "final_observed_at_utc": "2026-10-10T00:06:44.166740+00:00",
+    "private_deep_link": null,
+    "private_deep_link_note": "Public Copy deep link menu and advertised shortcut returned empty clipboard; no internal API/database fallback used.",
+    "plan_result_file": "PLAN_RESULT.md",
+    "native_plan_progress_summary": [
+      "完整计划通过源码只读核验确认七项缺陷仍存在，并分别给出改动文件范围、回归测试、风险和验收条件。",
+      "P0：统一 STOP 与发送提交边界，协调入库、撤权、队列取消、发送门禁；保留 Linux 单实例、多 HTTP 线程、一个发送 worker，并验证第二实例及并发离线维护拒绝。",
+      "P1：认证健壮性、人工确认服务相关性后的限时可审计回复依据、显式正式入站服务策略（保留默认测试模式）、新预约草稿重置。保留 STOP/运营商门禁；权限快照、数据库升级、恢复和关闭须防止新咨询重新激活旧队列。",
+      "P2：第五批准 FAQ 的请求规则与预约提交语义区分；README、范围审查、平台草稿和E2E文档统一为 $350/10天/1修改/最多5批准FAQ，并明确客户承担第三方费用、清理备份和维护责任。",
+      "回归与验收区分 Windows 开发/模拟测试与支持的 Linux 完整离线、登录后核心UI、迁移/运维回归；真实E2E仍需号码、注册、参与者、正文、分段条数、费用及权限另行授权。",
+      "任务明确说明本轮仅只读检查，未修改业务文件、安装依赖、运行新测试或应用、配置凭据、发送真实短信。历史218项Windows结果及旧Linux报告未被冒充本次重跑。"
+    ],
+    "planning_assumptions": [
+      "人工确认相关性：操作员确认经核验入站为服务咨询，原入站时间起算限时权限；保留 STOP/运营商门禁，不扩大营销同意。",
+      "保留当前受支持 Linux 单实例进程、多 HTTP 线程、一个发送 worker；验证第二实例及并发离线维护拒绝；Windows 开发/模拟回归、Linux 完整运维验收。"
+    ],
+    "planning_assumptions_are_implementation_approval": false,
+    "implementation_approved": false,
+    "final_source_integrity": {
+      "verified_files": 64,
+      "mismatches": 0,
+      "preserved_zip_unchanged": true
+    },
+    "plan_result_sha256": "fe1e9e862d8b91976dbd67d355e67b157f233f8fb0b4b1a61fe4fc6ea7467c60"
+  },
+  "generated_prompt_sha256": "08c86a04b019035ebff22a7a0a3e194a8ad912c47e7b922aec56df0594fcebb8",
+  "files": [
+    {
+      "archive_path": "sms-reception-demo/.env.example",
+      "relative_path": ".env.example",
+      "bytes": 1514,
+      "sha256": "d9e12b32f9d7e0773f8c6502f46805a370e4491d29c4728fa768f1e2b0c7114e",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\.env.example",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/LICENSE",
+      "relative_path": "LICENSE",
+      "bytes": 1056,
+      "sha256": "1126322e2cc8d165adc4c792eeb195717de2bcc7b39be1ce77959d78e87ef685",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\LICENSE",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/README.md",
+      "relative_path": "README.md",
+      "bytes": 8203,
+      "sha256": "f5375645764780806efb95ef64ddf5f9cec32cb85b2b83ed10a0f26231a29c48",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\README.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/app.py",
+      "relative_path": "app.py",
+      "bytes": 22175,
+      "sha256": "bf595d75d311acd55a2a441cd228d25af2ecb7925d966048c804ff4c7ce336b7",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\app.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/platform-images/01-faq.jpg",
+      "relative_path": "artifacts/platform-images/01-faq.jpg",
+      "bytes": 170151,
+      "sha256": "180c398e5175b9945f03d1c37079cf1dc74698146c1aa4fa4584ef7d0a1aa8e8",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\platform-images\\01-faq.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/platform-images/02-pending-request.jpg",
+      "relative_path": "artifacts/platform-images/02-pending-request.jpg",
+      "bytes": 132437,
+      "sha256": "a1be414505fb1d4025309908158846b5f198355bda793e333b9f9c4fc40b35e3",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\platform-images\\02-pending-request.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/platform-images/03-consent-gate.jpg",
+      "relative_path": "artifacts/platform-images/03-consent-gate.jpg",
+      "bytes": 159924,
+      "sha256": "b8479ab1d575d9db0a07333e4194e257d677d6c3390bb362262d2b89e99b3fde",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\platform-images\\03-consent-gate.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/platform-images/04-opt-out-history.jpg",
+      "relative_path": "artifacts/platform-images/04-opt-out-history.jpg",
+      "bytes": 167208,
+      "sha256": "217ee3f5af27b75b4cc4e7e3faa44c8e6ffbeae6e89b8676bcf351a9588cbd71",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\platform-images\\04-opt-out-history.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/platform-images/05-human-handoff.jpg",
+      "relative_path": "artifacts/platform-images/05-human-handoff.jpg",
+      "bytes": 171052,
+      "sha256": "45c5648e01b1d0538bbd7de174f8cc94473f94d27b4f3f4e8c4a0a7a80ba3d90",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\platform-images\\05-human-handoff.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/real-e2e-status.json",
+      "relative_path": "artifacts/real-e2e-status.json",
+      "bytes": 572,
+      "sha256": "016c6393219a6e11ccb383a8d73e36f0d61f2c466963d978d8a25c226649a624",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\real-e2e-status.json",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/screenshots/01-faq.jpg",
+      "relative_path": "artifacts/screenshots/01-faq.jpg",
+      "bytes": 91719,
+      "sha256": "c62603e9437a93f9a22d506eba571903d678d3b67cbadffc503e46aab778f01a",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\screenshots\\01-faq.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/screenshots/02-pending-request.jpg",
+      "relative_path": "artifacts/screenshots/02-pending-request.jpg",
+      "bytes": 74364,
+      "sha256": "3d44e58ade93feedb67355e653686b3eafacd5ae309d58f92204baa97b42a8c8",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\screenshots\\02-pending-request.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/screenshots/03-consent-gate.jpg",
+      "relative_path": "artifacts/screenshots/03-consent-gate.jpg",
+      "bytes": 90204,
+      "sha256": "ec924a9eb93285a5b6a0fedcacee0a9fd13921f195f146ca4faeb4d06e785fae",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\screenshots\\03-consent-gate.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/screenshots/04-opt-out-history.jpg",
+      "relative_path": "artifacts/screenshots/04-opt-out-history.jpg",
+      "bytes": 93958,
+      "sha256": "0b757ceb9d219d2808d69714f74940e39481e9419d0bb77d215d4b2d71d9dfb1",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\screenshots\\04-opt-out-history.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/screenshots/05-human-handoff.jpg",
+      "relative_path": "artifacts/screenshots/05-human-handoff.jpg",
+      "bytes": 95857,
+      "sha256": "560de6a4fd638f435525dc0c6877c4ea1372c0d70eab3bcc91f646d2764dc861",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\screenshots\\05-human-handoff.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/screenshots/06-updated-pending-request.jpg",
+      "relative_path": "artifacts/screenshots/06-updated-pending-request.jpg",
+      "bytes": 70662,
+      "sha256": "947ebd07e906bc1773915fa01c132f5853601b985a968f2a24f3871ae3f5ff40",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\screenshots\\06-updated-pending-request.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/screenshots/07-service-operator-login.jpg",
+      "relative_path": "artifacts/screenshots/07-service-operator-login.jpg",
+      "bytes": 25280,
+      "sha256": "6461568dbbf5e4328b904bc5918e718ffc6e9c68440d4a47cfd4e15659d59447",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\screenshots\\07-service-operator-login.jpg",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/artifacts/test-run.txt",
+      "relative_path": "artifacts/test-run.txt",
+      "bytes": 34559,
+      "sha256": "911aadf7e0b8752e2b37d95c0905ff5ec04665c84e1ed2217f3be7e44332f2f7",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\artifacts\\test-run.txt",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/data/business.json",
+      "relative_path": "data/business.json",
+      "bytes": 1199,
+      "sha256": "c78b5da5b978e9078e28348562a9385ade51427f400435292b7b60093febf6c5",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\data\\business.json",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/data/synthetic_contacts.json",
+      "relative_path": "data/synthetic_contacts.json",
+      "bytes": 1503,
+      "sha256": "4e864c38f186870fd51582aa348e2a04b433f35957e8430872008e8fc7ecb1c7",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\data\\synthetic_contacts.json",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/deploy/harbor-home.service",
+      "relative_path": "deploy/harbor-home.service",
+      "bytes": 839,
+      "sha256": "6f87ff9bd66a4171f301773e79b5fad5b0c5fd5a816ae43c16376c7abe51cceb",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\deploy\\harbor-home.service",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/deploy/nginx.conf.example",
+      "relative_path": "deploy/nginx.conf.example",
+      "bytes": 2346,
+      "sha256": "a9896339193b7068def8a8db6de42d002852dd7df2521d68a019e8a69ecaf700",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\deploy\\nginx.conf.example",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/CLIENT_LAUNCH_CHECKLIST.md",
+      "relative_path": "docs/CLIENT_LAUNCH_CHECKLIST.md",
+      "bytes": 8631,
+      "sha256": "a23564cb93a667c4f39b0db7b3fd4f4439f80087d3e5b823053d68364f8d526a",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\CLIENT_LAUNCH_CHECKLIST.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/DEMO_SCRIPT.md",
+      "relative_path": "docs/DEMO_SCRIPT.md",
+      "bytes": 6087,
+      "sha256": "595f15493918cea004d2f9b60df863e4ed3131a55165ad8b845b55b7cab6b964",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\DEMO_SCRIPT.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/DEPLOYMENT_ZH.md",
+      "relative_path": "docs/DEPLOYMENT_ZH.md",
+      "bytes": 5969,
+      "sha256": "a3bfa084597f6e7c42f61f08ba4dcab6d6dd5bd9adf76266da93b8b1626b075a",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\DEPLOYMENT_ZH.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/LIVE_OFFICIAL_REFERENCES.md",
+      "relative_path": "docs/LIVE_OFFICIAL_REFERENCES.md",
+      "bytes": 7715,
+      "sha256": "84a41985cf78b91c3b9f45531b4d6fa486de73d3788e6ffd233b5b3be06bd07a",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\LIVE_OFFICIAL_REFERENCES.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/OFFICIAL_REFERENCES.md",
+      "relative_path": "docs/OFFICIAL_REFERENCES.md",
+      "bytes": 8033,
+      "sha256": "226e85ea7f29bdb7ddf43e37afe00c17b40e2c0bbc907cb22175468e3d38085a",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\OFFICIAL_REFERENCES.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/OPERATIONS_ZH.md",
+      "relative_path": "docs/OPERATIONS_ZH.md",
+      "bytes": 10085,
+      "sha256": "cc8119fec310183b41f907da5f7e508ba67f84fddd050e06876aa8c4a4e5c094",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\OPERATIONS_ZH.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/PLATFORM_DRAFTS.md",
+      "relative_path": "docs/PLATFORM_DRAFTS.md",
+      "bytes": 14935,
+      "sha256": "43ad117f19d5b29643457216c196ecc52affea17a223274b41adead63b9acad5",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\PLATFORM_DRAFTS.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/REAL_E2E_PLAN.md",
+      "relative_path": "docs/REAL_E2E_PLAN.md",
+      "bytes": 14505,
+      "sha256": "cbc777c1589df2f1d8ec11425eb7188502c7a3fff8e199c6822851be60376556",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\REAL_E2E_PLAN.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/SCREENSHOTS.md",
+      "relative_path": "docs/SCREENSHOTS.md",
+      "bytes": 1916,
+      "sha256": "015ba595bd9487ee08a09bd1334cbbe1a0dcfe2771e5626b0a579adc1481737b",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\SCREENSHOTS.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/SERVICE_SCOPE_REVIEW.md",
+      "relative_path": "docs/SERVICE_SCOPE_REVIEW.md",
+      "bytes": 10722,
+      "sha256": "c99f7b5c4f7afdfb29ea7780e9751924d519f23a2e47cbd3d3ae9b86dc7da302",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\SERVICE_SCOPE_REVIEW.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/START_ZH.md",
+      "relative_path": "docs/START_ZH.md",
+      "bytes": 4022,
+      "sha256": "28f58f3e6a4d2cfd53873702c28dc4ec878bac3ee73093771b7b8149fc4430af",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\START_ZH.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/docs/TEST_REPORT.md",
+      "relative_path": "docs/TEST_REPORT.md",
+      "bytes": 11621,
+      "sha256": "e3d3ad0b6e8f33b306a34f315417b0aee9e475fc4165e776164a00e024a4b7ef",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\docs\\TEST_REPORT.md",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/manage.py",
+      "relative_path": "manage.py",
+      "bytes": 5057,
+      "sha256": "baeb8d6c06b295f4f63e14a6d7ca0dfa4c3fc885d83de555446a730b0d2756bc",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\manage.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/migrations/001_outbox.sql",
+      "relative_path": "migrations/001_outbox.sql",
+      "bytes": 1944,
+      "sha256": "434156bdb0473d3e6aa7d583845c307e838ef142adba2bacd761d789e2d2641c",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\migrations\\001_outbox.sql",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/migrations/002_service_inbox.sql",
+      "relative_path": "migrations/002_service_inbox.sql",
+      "bytes": 754,
+      "sha256": "64e2d487f84743f74240843c234a9e53fa18780adcb5ea04e1d6fc1c6b464f62",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\migrations\\002_service_inbox.sql",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/package.json",
+      "relative_path": "package.json",
+      "bytes": 87,
+      "sha256": "18af16d7b23e9d955274ae02c2688aac88e740689e308a35ec90468aaf95c3f8",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\package.json",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/__init__.py",
+      "relative_path": "reception/__init__.py",
+      "bytes": 57,
+      "sha256": "850e290525e8176810a98092f64ea4008418fb9d367df5d955f7ebc7809778af",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\__init__.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/auth.py",
+      "relative_path": "reception/auth.py",
+      "bytes": 2662,
+      "sha256": "0240e6d521a96f68f90da2c9dcf46b9e490571b59201df289be4050b8a0e1f42",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\auth.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/config.py",
+      "relative_path": "reception/config.py",
+      "bytes": 6693,
+      "sha256": "e55675415075a1987d7e0c41aa2a735476034580de5ace3ccf5f8c279e33c78e",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\config.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/engine.py",
+      "relative_path": "reception/engine.py",
+      "bytes": 63946,
+      "sha256": "e6224b306d7d9caa7b316b8ccb88d9a4a12a7c7765e8a20c78d480cbe0b196be",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\engine.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/model.py",
+      "relative_path": "reception/model.py",
+      "bytes": 5105,
+      "sha256": "2088d80eba58c4ed1cc12e982bffdccf5b05f0247f594538f1934afab9f17cda",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\model.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/operations.py",
+      "relative_path": "reception/operations.py",
+      "bytes": 27407,
+      "sha256": "d4fc45ca97cf5c8360575ba058533b155cb2329e7d345995bc07fa4e6450775c",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\operations.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/outbox.py",
+      "relative_path": "reception/outbox.py",
+      "bytes": 24238,
+      "sha256": "f7c19a815a5d76a2d273ca1770daffcbfeb7c3d3bb5f5a4cedb9dc240021ad3b",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\outbox.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/provider.py",
+      "relative_path": "reception/provider.py",
+      "bytes": 17581,
+      "sha256": "994d24f6753361dc55e9097b4a2dd6948da62eb088cabe65297fb3fb52fb638f",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\provider.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/service.py",
+      "relative_path": "reception/service.py",
+      "bytes": 9754,
+      "sha256": "001729e7ac37d68696ed4f96014b3873d9e334608371dec81a7a689c35d70a65",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\service.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/reception/twilio_adapter.py",
+      "relative_path": "reception/twilio_adapter.py",
+      "bytes": 6261,
+      "sha256": "8214c488ba12025de1a9254ac1d9df99411b93408c0846837f576d2841503455",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\reception\\twilio_adapter.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/requirements-twilio.txt",
+      "relative_path": "requirements-twilio.txt",
+      "bytes": 93,
+      "sha256": "225b276d8fe859f32d45cc228b92eb3b7f7e0ecfcfa7d7800a6ffa3ad2102eee",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\requirements-twilio.txt",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/requirements.txt",
+      "relative_path": "requirements.txt",
+      "bytes": 143,
+      "sha256": "b297c90cb6eb3bb81bff02759a8adc015c3348e91f4ea975d86a2300f4567436",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\requirements.txt",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/scripts/preview.sh",
+      "relative_path": "scripts/preview.sh",
+      "bytes": 225,
+      "sha256": "a95fc8465c163ec1d3ab4715ce85121a6b904096b2368303c26466f87ed7ba23",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\scripts\\preview.sh",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/start.bat",
+      "relative_path": "start.bat",
+      "bytes": 40,
+      "sha256": "994f0ebe00546dec5f5c52e9715e43248d41b272e001923c648e68fdac0ae45d",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\start.bat",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/start.sh",
+      "relative_path": "start.sh",
+      "bytes": 64,
+      "sha256": "61cf92182ebfa77e23df4eb9d9a0b67af149959bff2e04632acdc516a7daf0b3",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\start.sh",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/tests/test_engine.py",
+      "relative_path": "tests/test_engine.py",
+      "bytes": 23210,
+      "sha256": "f0ca8c09fb6a158183987585fe4e87f1bcd4edf61639b91bea2f6a2b0cb278d9",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\tests\\test_engine.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/tests/test_http.py",
+      "relative_path": "tests/test_http.py",
+      "bytes": 20538,
+      "sha256": "b16c26b7e74fb1655a56dcfc93acb971d2c8455cd55e1db40aebc29b3ccee88a",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\tests\\test_http.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/tests/test_operations.py",
+      "relative_path": "tests/test_operations.py",
+      "bytes": 21417,
+      "sha256": "453328f22ade0a733a34da0948b1389a154d04b0f95013cd870b6c7b6c2f7e75",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\tests\\test_operations.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/tests/test_outbox.py",
+      "relative_path": "tests/test_outbox.py",
+      "bytes": 34947,
+      "sha256": "e0b725a8ed5fa161b0e9713d617a5cfbfd3885d22d568f101d9ee59b4dc416ad",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\tests\\test_outbox.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/tests/test_provider.py",
+      "relative_path": "tests/test_provider.py",
+      "bytes": 22613,
+      "sha256": "c6990f220a90e3fd47cf2cbba8dae1894f6fceb77a753cd38218e79c1ce3c82f",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\tests\\test_provider.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/tests/test_service_http.py",
+      "relative_path": "tests/test_service_http.py",
+      "bytes": 17777,
+      "sha256": "d432bc7a9ad24f29ae9053f367680ff32e1cabfdc2625e225541e689ef88c669",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\tests\\test_service_http.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/tests/test_service_pipeline.py",
+      "relative_path": "tests/test_service_pipeline.py",
+      "bytes": 19145,
+      "sha256": "71297f675e41260e83fac01683f1762e2d83d38bd8ef487bf59f7640c585b909",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\tests\\test_service_pipeline.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/tests/test_twilio_adapter.py",
+      "relative_path": "tests/test_twilio_adapter.py",
+      "bytes": 11372,
+      "sha256": "8c815c772dbd767778a8faa205a444a3ec6d45fa4b0f79f9762721ff45e82490",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\tests\\test_twilio_adapter.py",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/web/app.js",
+      "relative_path": "web/app.js",
+      "bytes": 50094,
+      "sha256": "a0063f1620ad2337045715e3c645e71dc25dd5334f8ae78305217541baa809aa",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\web\\app.js",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/web/index.html",
+      "relative_path": "web/index.html",
+      "bytes": 11234,
+      "sha256": "f34c2c3e32e80bddb709b74818690276b22a0eeaf3929280c708796f5db477ce",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\web\\index.html",
+      "verified": true
+    },
+    {
+      "archive_path": "sms-reception-demo/web/styles.css",
+      "relative_path": "web/styles.css",
+      "bytes": 29486,
+      "sha256": "e58ee4bd78c1f1845d40c10e06b9725cb3c2bac37e3119bc52e9845615f604c0",
+      "status": "copied",
+      "target_path": "D:\\SMS Reception Assistant\\web\\styles.css",
+      "verified": true
+    }
+  ],
+  "generated_artifacts": [
+    "OPTIMIZATION_PROMPT.md",
+    "MIGRATION_NOTES.md",
+    "PLAN_SUBMISSION.json",
+    "migration-evidence/",
+    "PLAN_RESULT.md"
+  ],
+  "final_source_integrity_verified_at_utc": "2026-10-10T00:06:44.166740+00:00"
+}

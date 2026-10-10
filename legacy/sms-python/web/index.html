@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Harbor &amp; Home · Reception desk demo</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body class="auth-loading">
+  <section id="auth-gate" class="auth-gate" aria-labelledby="auth-title">
+    <div class="auth-card"><span class="brand-mark">h<span>•</span></span><div class="eyebrow">RECEPTION DESK</div><h1 id="auth-title">Opening your workspace…</h1><p id="auth-description">Checking the secure operator session.</p><form id="login-form" hidden><label for="login-password">Operator password</label><input id="login-password" type="password" autocomplete="current-password" required><button id="login-button" class="button button-primary" type="submit">Sign in</button></form><p id="login-error" class="auth-error" role="alert" hidden></p><p class="auth-foot">Credentials are used only to establish the operator session.</p></div>
+  </section>
+  <aside class="sidebar" aria-label="Workspace navigation">
+    <a class="brand" href="#inbox" aria-label="Harbor and Home inbox"><span class="brand-mark">h<span>•</span></span><span class="brand-name">harbor &amp; home<small>RECEPTION DESK</small></span></a>
+    <div class="workspace-label">YOUR WORKSPACE</div>
+    <nav>
+      <button class="nav-button active" data-view="inbox"><span class="nav-icon" aria-hidden="true">▤</span><span>Inbox</span><span id="nav-inbox-count" class="nav-count">0</span></button>
+      <button class="nav-button" data-view="appointments"><span class="nav-icon" aria-hidden="true">▦</span><span>Appointment requests</span></button>
+      <button class="nav-button" data-view="consent"><span class="nav-icon" aria-hidden="true">✓</span><span>Consent records</span></button>
+      <button class="nav-button" data-view="business"><span class="nav-icon" aria-hidden="true">⌂</span><span>Business profile</span></button>
+      <button id="queue-nav" class="nav-button" data-view="outbox" hidden><span class="nav-icon" aria-hidden="true">↗</span><span>Delivery queue</span><span id="nav-queue-count" class="nav-count">0</span></button>
+    </nav>
+    <div class="sidebar-note"><div class="small-caption">BUILT FOR SMALL TEAMS</div><h3>A little less inbox.<br>A little more business.</h3><p>Answers, request collection, and a clear handoff to your team.</p><div class="sidebar-line"></div><span class="status-dot"></span> Local demonstration</div>
+    <div class="sidebar-foot"><span class="avatar brand-avatar">HH</span><div>Harbor &amp; Home<small>Fictional cleaning business</small></div></div>
+  </aside>
+
+  <main>
+    <header class="topbar"><div class="breadcrumbs">Workspace <span>/</span> <strong id="breadcrumb-view">Inbox</strong></div><div class="topbar-right"><button id="queue-pause-button" class="button button-danger" type="button" hidden>Pause sending</button><label class="privacy-toggle"><input type="checkbox" id="showcase-privacy" checked><span class="toggle-track" aria-hidden="true"></span><span>Showcase privacy</span></label><span id="runtime-pill" class="demo-pill">DEMO / SIMULATED</span><button id="refresh-button" class="icon-button" aria-label="Refresh workspace" title="Refresh workspace">↻</button><button id="logout-button" class="button button-secondary" type="button" hidden>Sign out</button></div></header>
+    <div class="page-content">
+      <section class="page-heading"><div><div class="eyebrow">HARBOR &amp; HOME CLEANING</div><h1 id="page-title">Your reception desk, organized.</h1><p id="page-description">Keep every inquiry in view. Give your team a clear next step.</p></div><button id="reset-button" class="button button-secondary reset-button"><span aria-hidden="true">↺</span> Reset demo</button></section>
+      <div class="demo-notice"><span class="notice-icon" aria-hidden="true">i</span><p id="runtime-notice"><strong>A safe space to explore.</strong> All people, numbers, and business details are synthetic. Replies are simulated; real outbound is disabled.</p><span class="mode-label" id="mode-label">Rules + mock understanding</span></div>
+      <div id="global-error" class="error-banner" role="alert" hidden></div>
+      <div id="action-toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+      <section class="metrics" aria-label="Workspace summary">
+        <div class="metric"><span>Conversations</span><strong id="metric-contacts">0</strong><small>All in one place</small><span class="metric-icon">▤</span></div>
+        <div class="metric"><span>Pending requests</span><strong id="metric-appointments">0</strong><small>Owner confirmation needed</small><span class="metric-icon">▦</span></div>
+        <div class="metric"><span>With your team</span><strong id="metric-handoffs">0</strong><small>Automatic replies paused</small><span class="metric-icon">♧</span></div>
+        <div class="metric"><span id="metric-outbound-label">Simulated replies</span><strong id="metric-outbound">0</strong><small id="metric-outbound-note">No real messages sent</small><span class="metric-icon">↗</span></div>
+      </section>
+
+      <div class="workspace-grid">
+        <section id="view-inbox" class="view-panel inbox-panel">
+          <div class="conversation-list"><div class="panel-heading"><h2>Conversations</h2><span class="badge neutral" id="conversation-count">0</span></div><label class="search-input"><span aria-hidden="true">⌕</span><input id="search-conversations" type="search" placeholder="Search name or number" aria-label="Search conversations"></label><div id="conversation-items" class="conversation-items"></div><div class="list-foot"><span class="status-dot"></span> Synthetic contacts only</div></div>
+          <div class="conversation-detail"><div id="conversation-header" class="detail-header"></div><div id="conversation-status" class="conversation-status"></div><div id="message-list" class="message-list" aria-live="polite"></div><div id="conversation-footer" class="conversation-footer"></div></div>
+        </section>
+
+        <section id="view-appointments" class="view-panel collection-panel" hidden><div class="panel-heading"><div><h2>Appointment requests</h2><p>Requests stay pending until the business confirms.</p></div><span class="badge amber">Not confirmed bookings</span></div><div id="appointment-items" class="collection-items"></div></section>
+
+        <section id="view-consent" class="view-panel collection-panel" hidden><div class="panel-heading"><div><h2>Consent &amp; preference history</h2><p>A call or an ordinary message never restores consent.</p></div></div><div id="consent-items" class="collection-items"></div></section>
+
+        <section id="view-business" class="view-panel collection-panel" hidden><div class="panel-heading"><div><h2>Approved business information</h2><p>Replies use these facts. Missing details are referred to the team.</p></div><span class="badge neutral">Single business</span></div><form id="business-form" class="business-form"><div id="business-fields"></div><div class="form-actions"><button type="submit" class="button button-primary">Save business profile</button><span>Local demo configuration only.</span></div></form></section>
+
+        <section id="view-outbox" class="view-panel collection-panel" hidden><div class="panel-heading"><div><h2>Delivery queue</h2><p>API acceptance, sending, and delivery are separate outcomes. Delivery does not mean the message was read.</p></div><span id="queue-state" class="badge neutral">Checking status</span></div><div id="queue-restore-warning" class="queue-warning" role="alert" hidden>Restore review required. Sending remains blocked until an offline reconciliation is recorded.</div><div id="inbound-processing-warning" class="queue-warning" role="alert" hidden></div><div id="queue-counts" class="queue-counts"></div><div class="queue-guidance">“Needs review” means the sending outcome is uncertain. Check the provider status; no automatic resend is available here.</div><div id="outbox-items" class="collection-items"></div><section id="inbound-processing-panel" class="inbound-processing-panel" hidden><h3>Inbound processing issues</h3><p>These records show intake status only. Customer message bodies are excluded.</p><div id="inbound-processing-items"></div></section></section>
+
+        <aside class="simulator-panel" aria-label="Scenario simulator"><div class="panel-heading"><div><div class="eyebrow">TRY THE EXPERIENCE</div><h2>Message simulator</h2></div><span class="simulator-icon" aria-hidden="true">↗</span></div><p class="simulator-intro">Play the customer. See how the desk responds.</p><form id="simulate-form"><label for="sim-contact">Synthetic contact</label><select id="sim-contact"></select><div id="sim-phone-fields" hidden><label for="sim-phone">Phone number</label><input id="sim-phone" type="tel" autocomplete="off" value="+12025550101" required></div><label for="sim-kind">Event</label><select id="sim-kind"><option value="sms">Incoming SMS</option><option value="missed_call">Missed call · no answer</option><option value="consent">Verified demo consent</option></select><div id="sms-fields"><label for="sim-text">Customer message</label><textarea id="sim-text" rows="3" placeholder="What time are you open?" required></textarea></div><div id="call-fields" hidden><label for="dial-status">Dial result</label><select id="dial-status"><option value="no-answer">No answer</option><option value="busy">Busy</option><option value="failed">Failed</option><option value="completed">Completed (no follow-up)</option><option value="canceled">Canceled (no follow-up)</option></select><p class="field-help">Uses the dial outcome. A completed call may have reached voicemail.</p></div><div id="consent-fields" hidden><p class="field-help">Creates a synthetic, verified web-form record for customer care and missed-call follow-up. This does not represent real customer consent.</p></div><button type="submit" class="button button-primary simulate-submit"><span aria-hidden="true">↗</span> Run simulation</button></form><div id="simulation-result" class="simulation-result" role="status" hidden></div><div class="scenario-header"><h3>Ready-made scenarios</h3><span>Click to run</span></div><div id="scenario-buttons" class="scenario-buttons"></div><details class="simulator-details"><summary>About this demo</summary><p>The default experience uses deterministic rules and simulated understanding. No real model capability is claimed. No texts, calls, or bookings leave this workspace.</p><p>Consent, handoff, and sending restrictions stay in control in every scenario.</p></details></aside>
+      </div>
+      <section class="activity-panel"><details id="activity-details"><summary><span>Recent activity</span><span id="activity-summary">Waiting for activity</span></summary><div id="activity-items"></div></details></section>
+      <footer class="page-footer"><span id="workspace-footnote">Personal demonstration project · Not a commercial client case study</span><button id="desktop-exit-button" class="button button-secondary" type="button" hidden>Exit local demo</button><span id="last-updated">Connecting to local workspace…</span></footer>
+    </div>
+  </main>
+</body>
+</html>

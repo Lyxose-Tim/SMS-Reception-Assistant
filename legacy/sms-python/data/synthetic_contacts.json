@@ -1,0 +1,9 @@
+[
+  {"phone":"+12025550101","name":"Alex Morgan","scenario":"Normal FAQ inquiry","consent":null},
+  {"phone":"+12025550102","name":"Jamie Chen","scenario":"Incomplete appointment request","consent":{"source":"Synthetic website checkbox","purposes":["sms_inquiry","appointment_request"],"evidence":"DEMO-CONSENT-JAMIE-001","verified":true}},
+  {"phone":"+12025550103","name":"Taylor Reed","scenario":"Outside service area","consent":null},
+  {"phone":"+12025550104","name":"Casey Rivera","scenario":"Human takeover","consent":{"source":"Synthetic signed intake form","purposes":["sms_inquiry","appointment_request"],"evidence":"DEMO-CONSENT-CASEY-001","verified":true}},
+  {"phone":"+12025550105","name":"Jordan Blake","scenario":"Missed call without verified consent","consent":{"source":"Synthetic unverified verbal claim","purposes":["missed_call_followup"],"evidence":"DEMO-UNVERIFIED-JORDAN-001","verified":false}},
+  {"phone":"+12025550106","name":"Avery Stone","scenario":"Missed call with verified scoped consent","consent":{"source":"Synthetic website missed-call follow-up checkbox","purposes":["sms_inquiry","appointment_request","missed_call_followup"],"evidence":"DEMO-CONSENT-AVERY-001","verified":true}},
+  {"phone":"+12025550107","name":"Sam Ellis","scenario":"Opted out; regular messages blocked","consent":{"source":"Synthetic website checkbox","purposes":["sms_inquiry","appointment_request","missed_call_followup"],"evidence":"DEMO-CONSENT-SAM-001","verified":true},"revoked":true}
+]

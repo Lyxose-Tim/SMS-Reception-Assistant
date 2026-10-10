@@ -1,0 +1,31 @@
+# Reviewed template only. Installation/deployment is a separate authorized task.
+[Unit]
+Description=Harbor and Home single-number SMS reception
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=harbor-home
+Group=harbor-home
+WorkingDirectory=/opt/harbor-home
+EnvironmentFile=/etc/harbor-home/reception.env
+ExecStart=/opt/harbor-home/.venv/bin/python /opt/harbor-home/app.py --db /var/lib/harbor-home/service.sqlite3 --port 8765
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=25
+UMask=0077
+StateDirectory=harbor-home
+StateDirectoryMode=0700
+RuntimeDirectory=harbor-home
+RuntimeDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/harbor-home /run/harbor-home
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
