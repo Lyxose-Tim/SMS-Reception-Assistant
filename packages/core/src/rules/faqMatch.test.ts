@@ -39,7 +39,7 @@ describe('matchFaq', () => {
 });
 
 describe('matchFaq precision fixes', () => {
-  const domain = ['Harbor & Home Cleaning', 'Standard cleaning', 'Deep cleaning', 'Move-out cleaning'];
+  const domain = ['Standard cleaning', 'Deep cleaning', 'Move-out cleaning'];
   const zhPets: Faq = { id: 'zh-pets', question: '可以带宠物吗', answer: '可以。', enabled: true };
 
   it('strips Chinese function words before building bigrams', () => {
@@ -58,5 +58,8 @@ describe('matchFaq precision fixes', () => {
     expect(matchFaq('do you bring supplies?', faqs, domain)?.id).toBe('faq-supplies');
     expect(matchFaq('can pets stay at home?', faqs, domain)?.id).toBe('faq-pets');
   });
-});
 
+  it('does not match on single shared token in multi-token FAQ', () => {
+    expect(matchFaq('Will you allow me to reschedule?', faqs, domain)).toBeNull();
+  });
+});

@@ -44,12 +44,13 @@ export function matchFaq(text: string, faqs: Faq[], ignoreTerms: readonly string
   let best: { faq: Faq; overlap: number; ratio: number } | null = null;
   for (const faq of faqs) {
     if (!faq.enabled) continue;
-    const tokens = new Set([...faqTokens(faq.question)].filter((token) => !ignored.has(token)));
+    const allTokens = faqTokens(faq.question);
+    const tokens = new Set([...allTokens].filter((token) => !ignored.has(token)));
     if (tokens.size === 0) continue;
     let overlap = 0;
     for (const token of tokens) if (query.has(token)) overlap++;
     const ratio = overlap / tokens.size;
-    const accepted = (overlap >= 2 && ratio >= 0.34) || (overlap >= 1 && ratio >= 0.5 && tokens.size <= 2);
+    const accepted = (overlap >= 2 && ratio >= 0.34) || (overlap >= 1 && ratio >= 0.5 && allTokens.size <= 2);
     if (!accepted) continue;
     if (!best || overlap > best.overlap || (overlap === best.overlap && ratio > best.ratio)) {
       best = { faq, overlap, ratio };
