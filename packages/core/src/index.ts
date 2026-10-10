@@ -6,3 +6,7 @@ export * from './knowledge';
 export * from './demo';
 export * from './booking';
 export * from './prompt';
+export * from './engine';
+export { respondWithRules, type RulesOutcome } from './rules/respond';
+export { classify, isExplicitQuestion, type Classification, type Topic } from './rules/classify';
+export { matchFaq } from './rules/faqMatch';
