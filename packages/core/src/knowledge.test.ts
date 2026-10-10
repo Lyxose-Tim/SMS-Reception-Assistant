@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { demoKnowledge } from './demo';
-import { buildKnowledgeBlock, KNOWLEDGE_LIMITS, profileText, validateKnowledge } from './knowledge';
-import type { Faq } from './types';
+import {
+  buildKnowledgeBlock,
+  FAQ_ENTRY_OVERHEAD,
+  HEADER_RESERVE,
+  KNOWLEDGE_LIMITS,
+  MAX_NAME_CHARS,
+  profileText,
+  validateKnowledge,
+} from './knowledge';
+import type { BusinessProfile, Faq } from './types';
 
 const faq = (i: number, answerLength = 50): Faq => ({
   id: `f${i}`,
@@ -9,6 +17,19 @@ const faq = (i: number, answerLength = 50): Faq => ({
   answer: 'a'.repeat(answerLength),
   enabled: true,
 });
+
+/** 30 enabled FAQs sized so the validation total equals `target` exactly. */
+const faqsForValidationTotal = (profile: BusinessProfile, target: number): Faq[] => {
+  const faqs = Array.from({ length: 30 }, (_, i) => faq(i, 0));
+  const fixed =
+    HEADER_RESERVE +
+    profileText(profile).length +
+    faqs.reduce((n, f) => n + f.question.length + FAQ_ENTRY_OVERHEAD, 0);
+  const answerChars = target - fixed;
+  const each = Math.floor(answerChars / faqs.length);
+  const extra = answerChars - each * faqs.length;
+  return faqs.map((f, i) => ({ ...f, answer: 'a'.repeat(each + (i < extra ? 1 : 0)) }));
+};
 
 describe('profileText', () => {
   it('includes hours, areas, services and contact', () => {
@@ -57,6 +78,24 @@ describe('validateKnowledge', () => {
     const many = Array.from({ length: 30 }, (_, i) => faq(i, 480));
     expect(validateKnowledge(k.profile, many).map((i) => i.path)).toContain('knowledge');
   });
+
+  it('accepts knowledge whose total is exactly at the cap', () => {
+    const k = demoKnowledge();
+    const faqs = faqsForValidationTotal(k.profile, KNOWLEDGE_LIMITS.totalChars);
+    expect(validateKnowledge(k.profile, faqs)).toEqual([]);
+  });
+
+  it('flags knowledge whose total is one character over the cap', () => {
+    const k = demoKnowledge();
+    const faqs = faqsForValidationTotal(k.profile, KNOWLEDGE_LIMITS.totalChars + 1);
+    const issues = validateKnowledge(k.profile, faqs);
+    expect(issues).toContainEqual({
+      path: 'knowledge',
+      code: 'too_long',
+      limit: KNOWLEDGE_LIMITS.totalChars,
+      actual: KNOWLEDGE_LIMITS.totalChars + 1,
+    });
+  });
 });
 
 describe('buildKnowledgeBlock', () => {
@@ -75,7 +114,29 @@ describe('buildKnowledgeBlock', () => {
     k.faqs = Array.from({ length: 40 }, (_, i) => faq(i, 500));
     const { text, truncated } = buildKnowledgeBlock(k);
     expect(truncated).toBe(true);
-    expect(text.length).toBeLessThanOrEqual(KNOWLEDGE_LIMITS.totalChars + 100);
+    expect(text.length).toBeLessThanOrEqual(KNOWLEDGE_LIMITS.totalChars);
+  });
+
+  it('clips an over-long business name and still respects the budget', () => {
+    const k = demoKnowledge();
+    k.name = 'N'.repeat(500);
+    k.faqs = Array.from({ length: 40 }, (_, i) => faq(i, 500));
+    const { text, truncated } = buildKnowledgeBlock(k);
+    const nameLine = text.split('\n')[0]!.slice('Business name: '.length);
+    expect(nameLine.length).toBeLessThanOrEqual(MAX_NAME_CHARS);
+    expect(truncated).toBe(true);
+    expect(text.length).toBeLessThanOrEqual(KNOWLEDGE_LIMITS.totalChars);
+  });
+
+  it('never truncates knowledge that passes validation, even at the cap', () => {
+    const k = demoKnowledge();
+    k.name = 'N'.repeat(MAX_NAME_CHARS);
+    k.faqs = faqsForValidationTotal(k.profile, KNOWLEDGE_LIMITS.totalChars);
+    expect(validateKnowledge(k.profile, k.faqs)).toEqual([]);
+    const { text, truncated } = buildKnowledgeBlock(k);
+    expect(truncated).toBe(false);
+    expect(text).toContain(`Q: ${k.faqs[29]!.question}`);
+    expect(text.length).toBeLessThanOrEqual(KNOWLEDGE_LIMITS.totalChars);
   });
 
   it('neutralizes reserved tags inside business data', () => {
