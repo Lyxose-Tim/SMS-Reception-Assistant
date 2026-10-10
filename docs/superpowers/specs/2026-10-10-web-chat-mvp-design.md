@@ -69,7 +69,8 @@ legacy/sms-python 旧项目归档（只读参考）
 ## Server API（Hono）
 **公开（微件）**
 - 按 `allowed_origins` 校验 CORS
-- 按 IP 和访客 token 限流；消息最长 1000 字，单会话轮数设上限
+- 限流：每个访客 token 每分钟 20 条，每个 IP 每分钟 60 条，每个 IP 每小时新建 20 个会话
+- 消息最长 1000 字符；单会话最多 100 条访客消息，超出时提示联系商家并转人工
 
 接口：
 - `GET  /api/widget/:slug/config`
@@ -138,7 +139,7 @@ legacy/sms-python 旧项目归档（只读参考）
 - 自写轻量事件总线 `Map<topic, Set<listener>>`，取代全局 EventEmitter，避免 MaxListeners 告警掩盖泄漏
 - Hono `streamSSE` 中订阅后，在 `stream.onAbort()` 和 `finally` 两处都执行 unsubscribe（幂等）
 - 每 25s 发一次 heartbeat 注释行，写失败即清理，可探测半开连接
-- 限制每个访客 token / 后台 session 的并发 SSE 数（例如 3 个），超出时关闭最旧的连接
+- 限制每个访客 token / 后台 session 的并发 SSE 数（每个 3 个），超出时关闭最旧的连接
 - 重连带 `Last-Event-ID`，或从 `?since=` 补发错过的消息
 - 测试：反复建立并中断 100 次连接，总线 listener 计数回到 0
 
