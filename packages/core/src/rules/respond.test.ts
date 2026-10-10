@@ -110,6 +110,28 @@ describe('respondWithRules: cancel without a draft', () => {
     expect(out.bookingDraft).toBeNull();
     expect(out.replies).toEqual([t('zh-CN', 'cancel_existing')]);
   });
+
+  it.each(['Can I cancel my appointment?', 'How do I cancel my booking?'])('does not start a booking from the question %j', (text) => {
+    const out = respondWithRules(k, text, 'en', null, now);
+    expect(out.replies).toEqual([t('en', 'cancel_existing')]);
+    expect(out.handoff).toEqual({ reason: 'visitor_request' });
+    expect(out.bookingDraft).toBeNull();
+    expect(out.bookingRequest).toBeUndefined();
+  });
+
+  it('does not start a booking from an unpunctuated Chinese cancel question', () => {
+    const out = respondWithRules(k, '可以取消预约吗', 'zh-CN', null, now);
+    expect(out.replies).toEqual([t('zh-CN', 'cancel_existing')]);
+    expect(out.handoff).toEqual({ reason: 'visitor_request' });
+    expect(out.bookingDraft).toBeNull();
+  });
+
+  it('answers a cancel-flavoured question the knowledge base can answer, without handoff', () => {
+    const out = respondWithRules(k, 'Can I cancel? What are your hours?', 'en', null, now);
+    expect(out.replies).toEqual([`Our hours: ${k.profile.hours}`]);
+    expect(out.handoff).toBeUndefined();
+    expect(out.bookingDraft).toBeNull();
+  });
 });
 
 describe('respondWithRules: active draft keeps junk out of fields', () => {
@@ -162,6 +184,37 @@ describe('respondWithRules: active draft keeps junk out of fields', () => {
     const out = respondWithRules(k, 'how do I cancel?', 'en', awaitingName(), now);
     expect(out.bookingDraft).not.toBeNull();
     expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.replies).toEqual([t('en', 'booking_question_unanswered'), 'Could you share your name?']);
+  });
+
+  it('does not store an unpunctuated Chinese question as the name', () => {
+    const out = respondWithRules(k, '你们带清洁用品吗', 'zh-CN', awaitingName(), now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.bookingDraft?.awaiting).toBe('name');
+    expect(out.replies.at(-1)).toBe('请提供您的姓名。');
+  });
+
+  it('answers a punctuated Chinese hours question and re-asks the name', () => {
+    const out = respondWithRules(k, '你们几点开门？', 'zh-CN', awaitingName(), now);
+    expect(out.replies).toEqual([`营业时间：${k.profile.hours}`, '请提供您的姓名。']);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+  });
+
+  it('does not cancel the draft on 取消吗？', () => {
+    const out = respondWithRules(k, '取消吗？', 'zh-CN', awaitingName(), now);
+    expect(out.bookingDraft).not.toBeNull();
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+  });
+
+  it('returns a refreshed copy of the draft on a human handoff', () => {
+    const draft = awaitingName();
+    const before = structuredClone(draft);
+    const out = respondWithRules(k, 'I want to talk to a real person', 'en', draft, now);
+    expect(out.handoff).toEqual({ reason: 'visitor_request' });
+    expect(out.bookingDraft?.fields).toEqual(before.fields);
+    expect(out.bookingDraft?.updatedAt).toBe(now.toISOString());
+    expect(out.bookingDraft).not.toBe(draft);
+    expect(draft).toEqual(before);
   });
 });
 

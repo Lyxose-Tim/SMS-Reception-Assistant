@@ -79,6 +79,11 @@ describe('isExplicitQuestion', () => {
     ['What are your hours', true],
     ['周六可以吗？', true],
     ['周六几点都可以', false],
+    ['你们带清洁用品吗', true],
+    ['你们带清洁用品吗。', true],
+    ['可以吗 ', true],
+    ['好呢～', true],
+    ['吗我不知道', false],
     ['Saturday morning', false],
   ])('%s → %s', (text, expected) => {
     expect(isExplicitQuestion(text)).toBe(expected);

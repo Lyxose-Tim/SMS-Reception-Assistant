@@ -40,9 +40,11 @@ const ZH: Record<Signal, string[]> = {
 const QUESTION_START = /^\s*(what|when|where|how|do|does|are|is|can|could|which|who|will|would)\b/i;
 const ZH_QUESTION = ['吗', '什么', '怎么', '多少', '哪', '几', '是否'];
 
-/** Punctuation or an English question opener; deliberately ignores Chinese question words (e.g. 几) that also appear in plain answers. */
+const ZH_QUESTION_END = /[吗呢][\s。！!~～]*$/;
+
+/** Punctuation, an English question opener or a sentence-final 吗/呢; deliberately ignores Chinese question words (e.g. 几) that also appear in plain answers. */
 export function isExplicitQuestion(text: string): boolean {
-  return /[?？]/.test(text) || QUESTION_START.test(text);
+  return /[?？]/.test(text) || QUESTION_START.test(text) || ZH_QUESTION_END.test(text);
 }
 
 function hit(text: string, signal: Signal): boolean {

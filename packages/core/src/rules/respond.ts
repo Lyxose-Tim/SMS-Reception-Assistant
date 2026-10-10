@@ -47,9 +47,13 @@ export function respondWithRules(
     return { replies: [t(locale, 'booking_cancelled')], bookingDraft: null };
   }
   if (c.wantsHuman) {
-    return { replies: [t(locale, 'handoff')], bookingDraft: draft, handoff: { reason: 'visitor_request' } };
+    return { replies: [t(locale, 'handoff')], bookingDraft: draft ? refreshed(draft, now) : null, handoff: { reason: 'visitor_request' } };
   }
-  if (!draft && c.wantsCancel && !c.isQuestion) {
+  if (!draft && c.wantsCancel) {
+    if (c.isQuestion) {
+      const answer = answerQuestion(k, text, c, locale);
+      if (answer) return { replies: [answer], bookingDraft: null };
+    }
     return { replies: [t(locale, 'cancel_existing')], bookingDraft: null, handoff: { reason: 'visitor_request' } };
   }
   if (draft) {
