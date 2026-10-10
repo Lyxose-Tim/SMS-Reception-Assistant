@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_SCAN_CHARS,
   askFor,
   contactValue,
   extractContact,
@@ -12,6 +13,12 @@ import {
   setDraftFields,
 } from './booking';
 import { demoKnowledge } from './demo';
+
+function timed<T>(fn: () => T): { result: T; ms: number } {
+  const start = performance.now();
+  const result = fn();
+  return { result, ms: performance.now() - start };
+}
 
 const k = demoKnowledge();
 const defs = k.bookingFields;
@@ -102,5 +109,107 @@ describe('askFor', () => {
     );
     expect(askFor(def('contact'), 'zh-CN', services)).toBe('请留下可以联系到您的邮箱或电话。');
     expect(askFor(def('name'), 'zh-CN', services)).toBe('请提供您的姓名。');
+  });
+});
+
+describe('hardening: length caps and bounded cost', () => {
+  it('exports the scan cap', () => {
+    expect(MAX_SCAN_CHARS).toBe(1000);
+  });
+
+  it('rejects a huge contact value quickly', () => {
+    const { result, ms } = timed(() => parseFieldValue(def('contact'), 'a'.repeat(100000) + '@b.co', services));
+    expect(result).toEqual({ ok: false, error: 'invalid_contact' });
+    expect(ms).toBeLessThan(50);
+  });
+
+  it('rejects a huge service value before matching', () => {
+    expect(parseFieldValue(def('service'), 'deep '.repeat(1000), services)).toEqual({ ok: false, error: 'invalid_service' });
+  });
+
+  it('extractContact scans a bounded prefix and stays fast', () => {
+    const { result, ms } = timed(() => extractContact('x'.repeat(5000)));
+    expect(result).toBeNull();
+    expect(ms).toBeLessThan(50);
+    expect(extractContact(' '.repeat(MAX_SCAN_CHARS) + 'alex@example.com')).toBeNull();
+  });
+
+  it('rejects emails longer than 254 chars', () => {
+    expect(extractContact(`${'a'.repeat(250)}@example.com`)).toBeNull();
+  });
+
+  it('accepts a 200-char name and rejects 201', () => {
+    expect(parseFieldValue(def('name'), 'x'.repeat(200), services)).toEqual({ ok: true, value: 'x'.repeat(200) });
+    expect(parseFieldValue(def('name'), 'x'.repeat(201), services)).toEqual({ ok: false, error: 'invalid_text' });
+  });
+});
+
+describe('hardening: phone false accepts', () => {
+  it('rejects dates', () => {
+    expect(extractContact('see you 2026-10-12')).toBeNull();
+    expect(extractContact('10/12/2026')).toBeNull();
+    expect(extractContact('2026/10/12')).toBeNull();
+  });
+
+  it('rejects more than 15 digits', () => {
+    expect(extractContact('1234567890123456')).toBeNull();
+  });
+
+  it('still accepts real phones and emails', () => {
+    expect(extractContact('call +1 (202) 555-0123')).toBe('+1 (202) 555-0123');
+    expect(extractContact('13800138000')).toBe('13800138000');
+    expect(extractContact('alex@example.com')).toBe('alex@example.com');
+  });
+});
+
+describe('hardening: matchService', () => {
+  const hair = [
+    { name: 'Haircut', description: '', pricing: '' },
+    { name: 'Haircut and color', description: '', pricing: '' },
+  ];
+
+  it('prefers the longest contained service name', () => {
+    expect(matchService('haircut and color please', hair)).toBe('Haircut and color');
+    expect(matchService('just a haircut', hair)).toBe('Haircut');
+  });
+
+  it('never matches blank-named services', () => {
+    const blank = [
+      { name: '', description: '', pricing: '' },
+      { name: '   ', description: '', pricing: '' },
+    ];
+    expect(matchService('anything at all', blank)).toBeNull();
+    expect(matchService('1', blank)).toBeNull();
+    expect(matchService('x', [...blank, hair[0]!])).toBeNull();
+  });
+});
+
+describe('hardening: isDraftExpired', () => {
+  it('treats an unparseable updatedAt as expired', () => {
+    expect(isDraftExpired({ fields: {}, awaiting: null, updatedAt: 'garbage' }, now)).toBe(true);
+  });
+});
+
+describe('hardening: setDraftFields untrusted boundary', () => {
+  it('rejects non-string values', () => {
+    const { draft, rejected } = setDraftFields(
+      newDraft(now),
+      defs,
+      { name: 123, contact: null, service: {}, preferred_time: ['x'] },
+      services,
+      now,
+    );
+    expect(draft.fields).toEqual({});
+    expect(rejected.sort()).toEqual(['contact', 'name', 'preferred_time', 'service']);
+  });
+
+  it('preserves existing fields not mentioned and does not mutate the input', () => {
+    const input = { fields: { name: 'Alex', service: 'Deep cleaning' }, awaiting: 'contact', updatedAt: new Date(0).toISOString() };
+    const before = structuredClone(input);
+    const { draft } = setDraftFields(input, defs, { contact: 'alex@example.com' }, services, now);
+    expect(input).toEqual(before);
+    expect(draft.fields).toEqual({ name: 'Alex', service: 'Deep cleaning', contact: 'alex@example.com' });
+    expect(draft.fields).not.toBe(input.fields);
+    expect(draft.awaiting).toBe('contact');
   });
 });

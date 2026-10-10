@@ -3,19 +3,28 @@ import type { BookingDraft, BookingFieldDef, Locale, ServiceItem } from './types
 
 export const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_FIELD_CHARS = 200;
+/** Contact extraction only scans this many leading characters, bounding regex cost. */
+export const MAX_SCAN_CHARS = 1000;
+
+const MAX_EMAIL_CHARS = 254;
+const MAX_PHONE_DIGITS = 15;
 
 export type FieldError = 'invalid_contact' | 'invalid_service' | 'invalid_text';
 export type FieldParse = { ok: true; value: string } | { ok: false; error: FieldError };
 
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const PHONE = /\+?\d[\d\s().-]{5,}\d/;
+const DATE_YMD = /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/;
+const DATE_DMY = /^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/;
 
 export function newDraft(now: Date): BookingDraft {
   return { fields: {}, awaiting: null, updatedAt: now.toISOString() };
 }
 
 export function isDraftExpired(draft: BookingDraft, now: Date): boolean {
-  return now.getTime() - Date.parse(draft.updatedAt) > DRAFT_TTL_MS;
+  const updated = Date.parse(draft.updatedAt);
+  if (Number.isNaN(updated)) return true;
+  return now.getTime() - updated > DRAFT_TTL_MS;
 }
 
 export function nextMissingField(defs: BookingFieldDef[], draft: BookingDraft): BookingFieldDef | null {
@@ -27,11 +36,16 @@ export function isComplete(defs: BookingFieldDef[], draft: BookingDraft): boolea
 }
 
 export function extractContact(text: string): string | null {
-  const email = EMAIL.exec(text);
-  if (email) return email[0];
-  const phone = PHONE.exec(text);
-  if (phone && phone[0].replace(/\D/g, '').length >= 7) return phone[0].trim();
-  return null;
+  const scanned = text.slice(0, MAX_SCAN_CHARS);
+  const email = EMAIL.exec(scanned);
+  if (email) return email[0].length <= MAX_EMAIL_CHARS ? email[0] : null;
+  const phone = PHONE.exec(scanned);
+  if (!phone) return null;
+  const candidate = phone[0].trim();
+  const digits = candidate.replace(/\D/g, '').length;
+  if (digits < 7 || digits > MAX_PHONE_DIGITS) return null;
+  if (DATE_YMD.test(candidate) || DATE_DMY.test(candidate)) return null;
+  return candidate;
 }
 
 function escapeRegExp(text: string): string {
@@ -41,10 +55,18 @@ function escapeRegExp(text: string): string {
 export function matchService(text: string, services: ServiceItem[]): string | null {
   const lower = text.toLowerCase().trim();
   const numbered = /^(\d{1,2})$/.exec(lower);
-  if (numbered) return services[Number(numbered[1]) - 1]?.name ?? null;
-  const full = services.find((s) => lower.includes(s.name.toLowerCase()));
+  if (numbered) {
+    const picked = services[Number(numbered[1]) - 1]?.name;
+    return picked?.trim() ? picked : null;
+  }
+  const named = services.filter((s) => s.name.trim());
+  let full: ServiceItem | null = null;
+  for (const s of named) {
+    const name = s.name.toLowerCase();
+    if (lower.includes(name) && (!full || name.length > full.name.length)) full = s;
+  }
   if (full) return full.name;
-  const byHead = services.filter((s) => {
+  const byHead = named.filter((s) => {
     const head = s.name.toLowerCase().split(/\s+/)[0] ?? '';
     return head.length >= 3 && new RegExp(`(^|[^a-z])${escapeRegExp(head)}([^a-z]|$)`).test(lower);
   });
@@ -53,15 +75,21 @@ export function matchService(text: string, services: ServiceItem[]): string | nu
 
 export function parseFieldValue(def: BookingFieldDef, text: string, services: ServiceItem[]): FieldParse {
   const trimmed = text.trim();
+  const listsServices = def.kind === 'service' && services.length > 0;
+  if (trimmed.length > MAX_FIELD_CHARS) {
+    if (def.kind === 'contact') return { ok: false, error: 'invalid_contact' };
+    if (listsServices) return { ok: false, error: 'invalid_service' };
+    return { ok: false, error: 'invalid_text' };
+  }
   if (def.kind === 'contact') {
     const contact = extractContact(trimmed);
     return contact ? { ok: true, value: contact } : { ok: false, error: 'invalid_contact' };
   }
-  if (def.kind === 'service' && services.length > 0) {
+  if (listsServices) {
     const service = matchService(trimmed, services);
     return service ? { ok: true, value: service } : { ok: false, error: 'invalid_service' };
   }
-  if (!trimmed || trimmed.length > MAX_FIELD_CHARS) return { ok: false, error: 'invalid_text' };
+  if (!trimmed) return { ok: false, error: 'invalid_text' };
   return { ok: true, value: trimmed };
 }
 
