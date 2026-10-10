@@ -15,9 +15,9 @@ export interface Classification {
 const PLEASANTRY_PHRASES = [
   'thanks', 'thank you', 'thanks a lot', 'thx', 'ty', 'thank', 'thanks again', 'ok', 'okay', 'great', 'cool', 'got it',
   'bye', 'goodbye', 'see you', 'no problem', 'perfect',
-  '谢谢', '多谢', '谢啦', '好的', '好', '嗯', '行', '知道了', '再见', '拜拜', '没事', '没事了',
+  '谢谢', '谢谢你', '谢谢您', '谢谢你们', '谢谢大家', '多谢', '谢啦', '好的', '好', '嗯', '行', '知道了', '再见', '拜拜', '没事', '没事了',
 ];
-const PLEASANTRY_FILLERS = ['so', 'much', 'very', 'again', 'a', 'lot', '你', '您', '啦', '了', '呀', '哈'];
+const PLEASANTRY_FILLERS = ['so', 'much', 'very', 'again', 'a', 'lot', '你好', '您好', '啦', '了', '呀', '哈'];
 const PLEASANTRY_SET = new Set([...PLEASANTRY_PHRASES, ...PLEASANTRY_FILLERS]);
 const MAX_PHRASE_WORDS = 3;
 const SEPARATORS = /[\s\p{P}\p{S}\p{Extended_Pictographic}\uFE0F\u200D]+/u;
@@ -37,8 +37,12 @@ function segmentZh(run: string): string[] | null {
   return units;
 }
 
+const THANKS = /\b(thank|thanks|ty)\b|谢/i;
+
 /** True when the whole message is only pleasantry phrases and fillers (at least one real phrase), however punctuated. */
 function isPleasantry(text: string): boolean {
+  // A greeting wins over plain acknowledgements; only an explicit thanks makes "你好谢谢" a pleasantry.
+  if (hit(text, 'greeting') && !THANKS.test(text)) return false;
   const items: string[] = [];
   for (const chunk of text.toLowerCase().split(SEPARATORS)) {
     for (const part of chunk.match(CJK_RUN) ?? []) {
@@ -105,7 +109,7 @@ export function isExplicitQuestion(text: string): boolean {
   return /[?？]/.test(text) || QUESTION_START.test(text) || ZH_QUESTION_END.test(text);
 }
 
-const RESIDUE_STOP_EN = /\b(the|your|ur|a|an|me|my|for|of|pls|please|info|information|details?)\b/gi;
+const RESIDUE_STOP_EN = /\b(the|your|ur|a|an|me|my|for|of|pls|please|info|information|details?|list|menu|sheet)\b/gi;
 const RESIDUE_STOP_ZH = ['你们', '请问', '一下', '的', '呢', '啊', '吧', '请', '问', '有'];
 
 /** Text left after deleting the keywords of the given topics (and polite filler), with punctuation and whitespace removed. */

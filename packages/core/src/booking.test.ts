@@ -39,6 +39,18 @@ describe('extractContact', () => {
   });
 });
 
+describe('extractContact: masked clock times never bridge a phone number', () => {
+  it.each([
+    ['Dec 12 10:00 202 555 0123', '202 555 0123'],
+    ['Sat 3 10:00 2025550123', '2025550123'],
+    ['12 10:00 13800138000', '13800138000'],
+    ['13800138000 14:30 2', '13800138000'],
+    ['202 555 0123 3:30 5', '202 555 0123'],
+  ])('%s -> %s', (text, expected) => {
+    expect(extractContact(text)).toBe(expected);
+  });
+});
+
 describe('matchService', () => {
   it('matches by full name, distinctive first word or list number', () => {
     expect(matchService('Deep cleaning please', services)).toBe('Deep cleaning');

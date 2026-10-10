@@ -519,3 +519,39 @@ describe('respondWithRules: surnames that match topic keywords', () => {
     expect(out.replies.at(-1)).toBe('请提供您的姓名。');
   });
 });
+
+describe('respondWithRules: greetings are not pleasantries', () => {
+  it.each(['你好', '您好', '你好！', '你好呀'])('%s gets the zh greeting menu', (text) => {
+    const out = respondWithRules(k, text, 'zh-CN', null, now);
+    expect(out.replies).toEqual([t('zh-CN', 'greeting_menu')]);
+    expect(out.handoff).toBeUndefined();
+  });
+
+  it.each(['hello', 'hi there'])('%s gets the en greeting menu', (text) => {
+    const out = respondWithRules(k, text, 'en', null, now);
+    expect(out.replies).toEqual([t('en', 'greeting_menu')]);
+    expect(out.handoff).toBeUndefined();
+  });
+
+  it.each(['谢谢你们', '谢谢您', '谢谢大家', '你好谢谢'])('%s gets the pleasantry reply with no handoff', (text) => {
+    const out = respondWithRules(k, text, 'zh-CN', null, now);
+    expect(out.replies).toEqual([t('zh-CN', 'pleasantry_reply')]);
+    expect(out.handoff).toBeUndefined();
+  });
+});
+
+describe('respondWithRules: "price list" while awaiting the name', () => {
+  const awaitingName = (): BookingDraft => ({
+    fields: { service: 'Deep cleaning', preferred_time: 'Sat' },
+    awaiting: 'name',
+    updatedAt: now.toISOString(),
+  });
+
+  it.each(['price list', 'the price list'])('%s is answered and the name is re-asked, nothing stored', (text) => {
+    const out = respondWithRules(k, text, 'en', awaitingName(), now);
+    expect(out.replies[0]).toContain('Deep cleaning: Starting at $220');
+    expect(out.replies.at(-1)).toBe('Could you share your name?');
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.bookingDraft?.awaiting).toBe('name');
+  });
+});

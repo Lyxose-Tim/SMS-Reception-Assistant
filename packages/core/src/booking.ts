@@ -42,8 +42,9 @@ export function extractContact(text: string): string | null {
   const scanned = text.slice(0, MAX_SCAN_CHARS);
   const email = EMAIL.exec(scanned);
   if (email) return email[0].length <= MAX_EMAIL_CHARS ? email[0] : null;
-  // Clock times become spaces (same length, so offsets stay aligned) and can never be part of a phone candidate.
-  const masked = scanned.replace(CLOCK_TIME, (time) => ' '.repeat(time.length));
+  // Each character of a clock time becomes '#' (same length, so offsets stay aligned); '#' is outside the PHONE class,
+  // so a candidate can never span or absorb a masked time.
+  const masked = scanned.replace(CLOCK_TIME, (time) => '#'.repeat(time.length));
   for (const match of masked.matchAll(PHONE)) {
     const candidate = match[0].trim();
     const digits = candidate.replace(/\D/g, '').length;

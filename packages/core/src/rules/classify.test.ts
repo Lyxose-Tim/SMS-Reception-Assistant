@@ -129,3 +129,19 @@ describe('classify combined pleasantries', () => {
     },
   );
 });
+
+describe('classify greetings vs pleasantries', () => {
+  it.each(['你好', '您好', '你好！', '你好呀', 'hello', 'hi there'])('%s is a greeting, not a pleasantry', (text) => {
+    const c = classify(text);
+    expect(c.isGreeting).toBe(true);
+    expect(c.isPleasantry).toBe(false);
+  });
+
+  it.each(['谢谢你们', '谢谢您', '谢谢大家', '你好谢谢', '谢谢你', '好的谢谢'])('%s is a pleasantry', (text) => {
+    expect(classify(text).isPleasantry).toBe(true);
+  });
+
+  it.each(['你', '您'])('%s alone is not a pleasantry', (text) => {
+    expect(classify(text).isPleasantry).toBe(false);
+  });
+});

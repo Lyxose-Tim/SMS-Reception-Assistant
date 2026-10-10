@@ -83,7 +83,7 @@ export function respondWithRules(
 
 const EXPLICIT_CANCEL = /\bcancel\b|取消/i;
 /** Text this short that names a topic ("price", "多少钱") is a question even without punctuation. */
-const SHORT_TEXT_CHARS = 12;
+const SHORT_TEXT_CHARS = 16;
 /** ...but only when little but the topic keyword remains: "Sam Price" is a name, "the price" is a question. */
 const MAX_RESIDUE_CHARS = 3;
 
