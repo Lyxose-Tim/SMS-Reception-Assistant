@@ -1,6 +1,6 @@
 import type { Locale } from './types';
 
-const CJK = /[㐀-鿿豈-﫿]/g;
+const CJK = /[\u3400-\u9fff\uf900-\ufaff]/g;
 const LATIN_WORD = /[a-zA-Z]{2,}/g;
 
 /** Returns the language of a single message, or null when it is too short to tell. */

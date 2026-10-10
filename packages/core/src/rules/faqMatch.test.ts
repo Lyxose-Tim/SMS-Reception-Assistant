@@ -37,3 +37,26 @@ describe('matchFaq', () => {
     expect(matchFaq('家里有宠物可以吗', zh)?.id).toBe('zh-pets');
   });
 });
+
+describe('matchFaq precision fixes', () => {
+  const domain = ['Harbor & Home Cleaning', 'Standard cleaning', 'Deep cleaning', 'Move-out cleaning'];
+  const zhPets: Faq = { id: 'zh-pets', question: '可以带宠物吗', answer: '可以。', enabled: true };
+
+  it('strips Chinese function words before building bigrams', () => {
+    expect([...faqTokens('可以带宠物吗')]).toEqual(['带宠', '宠物']);
+  });
+
+  it('does not match on function words or a single shared character run', () => {
+    expect(matchFaq('可以带孩子吗', [zhPets])).toBeNull();
+    const card: Faq = { id: 'card', question: '你们可以刷卡吗', answer: '可以。', enabled: true };
+    expect(matchFaq('你们可以带宠物吗', [card])).toBeNull();
+    expect(matchFaq('家里有宠物可以吗', [zhPets])?.id).toBe('zh-pets');
+  });
+
+  it('ignores domain terms as match signals', () => {
+    expect(matchFaq('Do you do deep cleaning at home?', faqs, domain)).toBeNull();
+    expect(matchFaq('do you bring supplies?', faqs, domain)?.id).toBe('faq-supplies');
+    expect(matchFaq('can pets stay at home?', faqs, domain)?.id).toBe('faq-pets');
+  });
+});
+
