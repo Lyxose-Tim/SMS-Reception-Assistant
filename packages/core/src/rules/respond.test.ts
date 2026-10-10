@@ -454,3 +454,68 @@ describe('respondWithRules: answers to the awaited service field are not topic q
     expect(out.bookingDraft?.fields).toEqual({});
   });
 });
+
+describe('respondWithRules: combined pleasantries', () => {
+  it.each([
+    ['ok thanks', 'en'],
+    ['thank you so much', 'en'],
+    ['thanks, bye', 'en'],
+    ['ok bye', 'en'],
+    ['great, thanks!', 'en'],
+    ['ty', 'en'],
+    ['好的谢谢', 'zh-CN'],
+    ['好的，谢谢', 'zh-CN'],
+    ['谢谢你', 'zh-CN'],
+  ] as const)('replies politely to %j without a handoff', (text, locale) => {
+    const out = respondWithRules(k, text, locale, null, now);
+    expect(out.replies).toEqual([t(locale, 'pleasantry_reply')]);
+    expect(out.handoff).toBeUndefined();
+    expect(out.bookingDraft).toBeNull();
+  });
+
+  it('still answers the question in "thanks, what are your hours?"', () => {
+    const out = respondWithRules(k, 'thanks, what are your hours?', 'en', null, now);
+    expect(out.replies).toEqual([`Our hours: ${k.profile.hours}`]);
+    expect(out.handoff).toBeUndefined();
+  });
+
+  it('starts a booking on "ok I want to book"', () => {
+    const out = respondWithRules(k, 'ok I want to book', 'en', null, now);
+    expect(out.bookingDraft).not.toBeNull();
+    expect(out.handoff).toBeUndefined();
+  });
+});
+
+describe('respondWithRules: clock times are never contacts', () => {
+  it('keeps the phone and drops the time', () => {
+    const out = respondWithRules(k, 'book deep cleaning sat 10:00 202 555 0123', 'en', null, now);
+    expect(out.bookingDraft?.fields.contact).toBe('202 555 0123');
+    expect(out.bookingDraft?.fields.service).toBe('Deep cleaning');
+  });
+});
+
+describe('respondWithRules: surnames that match topic keywords', () => {
+  const awaitingName = (): BookingDraft => ({
+    fields: { service: 'Deep cleaning', preferred_time: 'Sat' },
+    awaiting: 'name',
+    updatedAt: now.toISOString(),
+  });
+
+  it.each(['Sam Price', 'Rachel Price', 'Ray Close'])('stores %j as the name', (name) => {
+    const out = respondWithRules(k, name, 'en', awaitingName(), now);
+    expect(out.bookingDraft?.fields.name).toBe(name);
+    expect(out.bookingDraft?.awaiting).toBe('contact');
+  });
+
+  it.each(['price', 'hours?', 'the price', 'pricing info'])('still treats %j as a question', (text) => {
+    const out = respondWithRules(k, text, 'en', awaitingName(), now);
+    expect(out.bookingDraft?.fields.name).toBeUndefined();
+    expect(out.replies.at(-1)).toBe('Could you share your name?');
+  });
+
+  it.each(['多少钱', '你们多少钱', '价格'])('still treats %j as a question', (text) => {
+    const out = respondWithRules(k, text, 'zh-CN', awaitingName(), now);
+    expect(out.bookingDraft?.fields.name).toBeUndefined();
+    expect(out.replies.at(-1)).toBe('请提供您的姓名。');
+  });
+});

@@ -42,6 +42,8 @@ describe('neutralizeTags: unterminated tags', () => {
 
 describe('cleanText: invisible characters', () => {
   it('strips zero-width and bidi control characters', () => {
-    expect(cleanText('a​b‏c‪d‮e⁠f⁤g﻿h')).toBe('abcdefgh');
+    const codes = [0x200b, 0x200f, 0x202a, 0x202e, 0x2060, 0x2064, 0xfeff];
+    const invisible = codes.map((code) => String.fromCharCode(code));
+    expect(cleanText(`a${invisible.join('b')}h`)).toBe('abbbbbbh');
   });
 });

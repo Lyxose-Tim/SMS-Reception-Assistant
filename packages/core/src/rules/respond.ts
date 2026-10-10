@@ -18,7 +18,7 @@ import type {
   HandoffReason,
   Locale,
 } from '../types';
-import { classify, isExplicitQuestion, type Classification, type Topic } from './classify';
+import { classify, isExplicitQuestion, topicResidue, type Classification, type Topic } from './classify';
 import { matchFaq } from './faqMatch';
 
 export interface RulesOutcome {
@@ -84,6 +84,14 @@ export function respondWithRules(
 const EXPLICIT_CANCEL = /\bcancel\b|取消/i;
 /** Text this short that names a topic ("price", "多少钱") is a question even without punctuation. */
 const SHORT_TEXT_CHARS = 12;
+/** ...but only when little but the topic keyword remains: "Sam Price" is a name, "the price" is a question. */
+const MAX_RESIDUE_CHARS = 3;
+
+function isBareTopic(text: string, topics: Topic[]): boolean {
+  if (text.trim().length > SHORT_TEXT_CHARS) return false;
+  const residue = topicResidue(text, topics);
+  return residue.length <= MAX_RESIDUE_CHARS && !/[a-z]/i.test(residue);
+}
 
 /** Topics whose keywords naturally occur in a plain answer to the awaited field, so they alone don't make it a question. */
 function answerTopics(def: BookingFieldDef | null | undefined): Topic[] {
@@ -98,7 +106,7 @@ function isDraftQuestion(text: string, c: Classification, awaited: BookingFieldD
   if (isExplicitQuestion(text)) return true;
   const own = answerTopics(awaited);
   const topics = c.topics.filter((topic) => !own.includes(topic));
-  if (topics.length > 0 && (c.isQuestion || text.trim().length <= SHORT_TEXT_CHARS)) return true;
+  if (topics.length > 0 && (c.isQuestion || isBareTopic(text, topics))) return true;
   // "怎么取消" / "how to cancel": a question about cancelling, never a field value.
   return c.wantsCancel && c.isQuestion;
 }

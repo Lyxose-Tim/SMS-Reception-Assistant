@@ -17,7 +17,8 @@ const PHONE = /\+?\d[\d\s().-]{5,}\d/g;
 // PHONE never contains "/", so slash dates (10/12/2026) never form a candidate in the first place.
 const DATE_YMD = /^\d{4}[-.]\d{1,2}[-.]\d{1,2}/;
 const DATE_DMY = /^\d{1,2}[-.]\d{1,2}[-.]\d{2,4}(\b|\s)/;
-const TIME_SUFFIX = /^:\d/;
+const CLOCK_TIME = /\d{1,2}\s*[:：]\s*\d{2}/g;
+const DIGIT = /\d/;
 
 export function newDraft(now: Date): BookingDraft {
   return { fields: {}, awaiting: null, updatedAt: now.toISOString() };
@@ -41,12 +42,15 @@ export function extractContact(text: string): string | null {
   const scanned = text.slice(0, MAX_SCAN_CHARS);
   const email = EMAIL.exec(scanned);
   if (email) return email[0].length <= MAX_EMAIL_CHARS ? email[0] : null;
-  for (const match of scanned.matchAll(PHONE)) {
+  // Clock times become spaces (same length, so offsets stay aligned) and can never be part of a phone candidate.
+  const masked = scanned.replace(CLOCK_TIME, (time) => ' '.repeat(time.length));
+  for (const match of masked.matchAll(PHONE)) {
     const candidate = match[0].trim();
     const digits = candidate.replace(/\D/g, '').length;
     if (digits < 7 || digits > MAX_PHONE_DIGITS) continue;
     if (DATE_YMD.test(candidate) || DATE_DMY.test(candidate)) continue;
-    if (TIME_SUFFIX.test(scanned.slice(match.index + match[0].length, match.index + match[0].length + 2))) continue;
+    // A candidate cut short by a masked time ("13800138000:30") is not a real number.
+    if (DIGIT.test(scanned[match.index - 1] ?? '') || DIGIT.test(scanned[match.index + match[0].length] ?? '')) continue;
     return candidate;
   }
   return null;

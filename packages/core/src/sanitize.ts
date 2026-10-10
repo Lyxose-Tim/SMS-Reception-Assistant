@@ -3,7 +3,7 @@ export const RESERVED_TAG_NAMES = ['business_info', 'visitor_message', 'booking_
 const RESERVED_TAG = new RegExp(`<\\s*\\/?\\s*(${RESERVED_TAG_NAMES.join('|')})\\b[^>]*>?`, 'gi');
 // Control characters plus zero-width / bidi formatting characters that can hide or reorder text.
 // eslint-disable-next-line no-control-regex
-const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F​-‏‪-‮⁠-⁤﻿]/g;
+const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
 
 /** Replaces < and > in reserved prompt tags so text cannot open or close a prompt section. */
 export function neutralizeTags(text: string): string {

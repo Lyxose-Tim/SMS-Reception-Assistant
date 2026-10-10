@@ -12,15 +12,60 @@ export interface Classification {
   isQuestion: boolean;
 }
 
-const PLEASANTRIES = new Set([
-  'thanks', 'thank you', 'thanks a lot', 'thx', 'ok', 'okay', 'great', 'cool', 'got it',
+const PLEASANTRY_PHRASES = [
+  'thanks', 'thank you', 'thanks a lot', 'thx', 'ty', 'thank', 'thanks again', 'ok', 'okay', 'great', 'cool', 'got it',
   'bye', 'goodbye', 'see you', 'no problem', 'perfect',
   '谢谢', '多谢', '谢啦', '好的', '好', '嗯', '行', '知道了', '再见', '拜拜', '没事', '没事了',
-]);
-const TRAILING_NOISE = /[\s\p{P}\p{S}\p{Extended_Pictographic}️]+$/u;
+];
+const PLEASANTRY_FILLERS = ['so', 'much', 'very', 'again', 'a', 'lot', '你', '您', '啦', '了', '呀', '哈'];
+const PLEASANTRY_SET = new Set([...PLEASANTRY_PHRASES, ...PLEASANTRY_FILLERS]);
+const MAX_PHRASE_WORDS = 3;
+const SEPARATORS = /[\s\p{P}\p{S}\p{Extended_Pictographic}\uFE0F\u200D]+/u;
+const CJK_RUN = /[^\sa-z0-9']+|[a-z0-9']+/g;
+const ZH_UNITS = [...PLEASANTRY_SET].filter((unit) => /[^a-z ]/.test(unit)).sort((a, b) => b.length - a.length);
 
+/** Greedy longest-match split of a Chinese run into known pleasantry units, or null if any part is unknown. */
+function segmentZh(run: string): string[] | null {
+  const units: string[] = [];
+  let i = 0;
+  while (i < run.length) {
+    const unit = ZH_UNITS.find((u) => run.startsWith(u, i));
+    if (!unit) return null;
+    units.push(unit);
+    i += unit.length;
+  }
+  return units;
+}
+
+/** True when the whole message is only pleasantry phrases and fillers (at least one real phrase), however punctuated. */
 function isPleasantry(text: string): boolean {
-  return PLEASANTRIES.has(text.trim().toLowerCase().replace(TRAILING_NOISE, ''));
+  const items: string[] = [];
+  for (const chunk of text.toLowerCase().split(SEPARATORS)) {
+    for (const part of chunk.match(CJK_RUN) ?? []) {
+      if (/^[a-z0-9']+$/.test(part)) {
+        items.push(part);
+        continue;
+      }
+      const units = segmentZh(part);
+      if (!units) return false;
+      items.push(...units);
+    }
+  }
+  let sawPhrase = false;
+  let i = 0;
+  while (i < items.length) {
+    let matched = 0;
+    for (let n = Math.min(MAX_PHRASE_WORDS, items.length - i); n >= 1; n--) {
+      if (PLEASANTRY_SET.has(items.slice(i, i + n).join(' '))) {
+        matched = n;
+        break;
+      }
+    }
+    if (!matched) return false;
+    if (PLEASANTRY_PHRASES.includes(items.slice(i, i + matched).join(' '))) sawPhrase = true;
+    i += matched;
+  }
+  return sawPhrase;
 }
 
 const TOPICS: Topic[] = ['hours', 'areas', 'services', 'pricing'];
@@ -58,6 +103,21 @@ const ZH_QUESTION_END = /[吗呢][\s。！!~～]*$/;
 /** Punctuation, an English question opener or a sentence-final 吗/呢; deliberately ignores Chinese question words (e.g. 几) that also appear in plain answers. */
 export function isExplicitQuestion(text: string): boolean {
   return /[?？]/.test(text) || QUESTION_START.test(text) || ZH_QUESTION_END.test(text);
+}
+
+const RESIDUE_STOP_EN = /\b(the|your|ur|a|an|me|my|for|of|pls|please|info|information|details?)\b/gi;
+const RESIDUE_STOP_ZH = ['你们', '请问', '一下', '的', '呢', '啊', '吧', '请', '问', '有'];
+
+/** Text left after deleting the keywords of the given topics (and polite filler), with punctuation and whitespace removed. */
+export function topicResidue(text: string, topics: Topic[]): string {
+  let rest = text;
+  for (const topic of topics) {
+    rest = rest.replace(new RegExp(EN[topic].source, 'gi'), ' ');
+    for (const word of ZH[topic]) rest = rest.split(word).join(' ');
+  }
+  rest = rest.replace(RESIDUE_STOP_EN, ' ');
+  for (const word of RESIDUE_STOP_ZH) rest = rest.split(word).join(' ');
+  return rest.replace(/[\s\p{P}\p{S}]+/gu, '');
 }
 
 function hit(text: string, signal: Signal): boolean {

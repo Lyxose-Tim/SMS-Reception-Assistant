@@ -113,3 +113,19 @@ describe('classify pleasantries', () => {
     expect(classify('请联系工作人员').wantsHuman).toBe(true);
   });
 });
+
+describe('classify combined pleasantries', () => {
+  it.each([
+    'ok thanks', 'thank you so much', 'thanks, bye', 'ok bye', 'great, thanks!', 'ty', 'thank', 'thanks again',
+    'Thanks so much!!', 'ok, thanks a lot ~', '好的谢谢', '好的，谢谢', '谢谢你', '好的谢谢啦', '谢谢您！', '好的，谢谢你啦～', '谢谢，再见',
+  ])('%s is a pleasantry', (text) => {
+    expect(classify(text).isPleasantry).toBe(true);
+  });
+
+  it.each(['', '   ', '!!!', 'so much', 'a lot', '你', '啦', 'ok I want to book', 'thanks, what are your hours?', '好的谢谢你们几点开门'])(
+    '%j is not a pleasantry',
+    (text) => {
+      expect(classify(text).isPleasantry).toBe(false);
+    },
+  );
+});

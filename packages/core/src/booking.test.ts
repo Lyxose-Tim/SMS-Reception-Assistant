@@ -235,3 +235,16 @@ describe('extractContact: dates and times are never contacts', () => {
     expect(extractContact('call 13800138000:30')).toBeNull();
   });
 });
+
+describe('extractContact: clock times never leak into contacts', () => {
+  it.each([
+    ['tomorrow 10:00 202 555 0123', '202 555 0123'],
+    ['周六 14:30 13800138000', '13800138000'],
+    ['13800138000 14：30', '13800138000'],
+    ['13800138000 14:30', '13800138000'],
+    ['+1 (202) 555-0123 14:30', '+1 (202) 555-0123'],
+    ['book deep cleaning sat 10:00', null],
+  ])('%j -> %j', (text, expected) => {
+    expect(extractContact(text)).toBe(expected);
+  });
+});
