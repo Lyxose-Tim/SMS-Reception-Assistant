@@ -52,10 +52,11 @@ export async function handleVisitorMessage(
   }
   if (conv.visitorMessageCount >= MAX_VISITOR_MESSAGES) {
     const contact = k.profile.contactEmail || k.profile.contactPhone;
+    const stale = conv.bookingDraft !== null && isDraftExpired(conv.bookingDraft, now);
     return {
       replies: [t(locale, 'message_limit', { business: k.name, contact })],
       locale,
-      bookingDraft: conv.bookingDraft,
+      bookingDraft: stale ? null : conv.bookingDraft,
       handoff: { reason: 'message_limit' },
       meta: { engine: 'none' },
     };
@@ -141,14 +142,20 @@ async function runModel(
     }
   }
 
+  // Keep `awaiting` aligned with the draft so a later rules turn stores the answer in the right field.
+  if (next) next = { ...next, awaiting: nextMissingField(k.bookingFields, next)?.key ?? null };
+
   const meta: EngineMeta = { engine: 'ai', knowledgeTruncated: truncated, actions: output.actions };
 
   if (submitted) {
+    const replies = [t(locale, 'booking_submitted', { business: k.name, contact: contactValue(k.bookingFields, submitted) })];
+    if (handoff) replies.push(t(locale, 'handoff'));
     return {
-      replies: [t(locale, 'booking_submitted', { business: k.name, contact: contactValue(k.bookingFields, submitted) })],
+      replies,
       locale,
       bookingDraft: null,
       bookingRequest: { fields: submitted },
+      ...(handoff ? { handoff: { reason: 'model_request' as const } } : {}),
       meta,
     };
   }
@@ -169,6 +176,19 @@ async function runModel(
   }
 
   const reply = output.text.trim();
-  if (!reply) return null;
+  if (!reply) {
+    // Tool-call-only turn: if it changed the draft, ask for the next field ourselves instead of discarding it.
+    if (next && !sameFields(draft, next)) {
+      const missing = nextMissingField(k.bookingFields, next);
+      if (missing) return { replies: [askFor(missing, locale, services)], locale, bookingDraft: next, meta };
+    }
+    return null;
+  }
   return { replies: [reply.slice(0, MAX_REPLY_CHARS)], locale, bookingDraft: next, meta };
+}
+
+function sameFields(a: BookingDraft | null, b: BookingDraft | null): boolean {
+  const left = Object.entries(a?.fields ?? {}).sort(([x], [y]) => x.localeCompare(y));
+  const right = Object.entries(b?.fields ?? {}).sort(([x], [y]) => x.localeCompare(y));
+  return left.length === right.length && left.every(([k, v], i) => k === right[i]![0] && v === right[i]![1]);
 }
