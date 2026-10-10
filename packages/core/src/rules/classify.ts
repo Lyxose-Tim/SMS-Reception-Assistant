@@ -7,7 +7,20 @@ export interface Classification {
   wantsHuman: boolean;
   wantsCancel: boolean;
   isGreeting: boolean;
+  /** The whole message is a thank-you, acknowledgement or farewell. */
+  isPleasantry: boolean;
   isQuestion: boolean;
+}
+
+const PLEASANTRIES = new Set([
+  'thanks', 'thank you', 'thanks a lot', 'thx', 'ok', 'okay', 'great', 'cool', 'got it',
+  'bye', 'goodbye', 'see you', 'no problem', 'perfect',
+  '谢谢', '多谢', '谢啦', '好的', '好', '嗯', '行', '知道了', '再见', '拜拜', '没事', '没事了',
+]);
+const TRAILING_NOISE = /[\s\p{P}\p{S}\p{Extended_Pictographic}️]+$/u;
+
+function isPleasantry(text: string): boolean {
+  return PLEASANTRIES.has(text.trim().toLowerCase().replace(TRAILING_NOISE, ''));
 }
 
 const TOPICS: Topic[] = ['hours', 'areas', 'services', 'pricing'];
@@ -32,7 +45,7 @@ const ZH: Record<Signal, string[]> = {
   services: ['服务项目', '什么服务', '哪些服务', '提供什么', '业务'],
   pricing: ['价格', '多少钱', '收费', '费用', '报价', '价钱', '人工费'],
   booking: ['预约', '预定', '预订', '约个时间', '约时间', '安排时间'],
-  human: ['转人工', '人工客服', '人工服务', '找人工', '真人', '联系客服', '转客服', '找客服', '工作人员'],
+  human: ['转人工', '人工客服', '人工服务', '找人工', '真人', '联系客服', '转客服', '找客服', '找工作人员', '转工作人员', '联系工作人员'],
   cancel: ['取消', '算了', '不约了'],
   greeting: ['你好', '您好', '在吗', '哈喽', '嗨'],
 };
@@ -64,6 +77,7 @@ export function classify(text: string): Classification {
     wantsHuman: hit(text, 'human'),
     wantsCancel: hit(text, 'cancel'),
     isGreeting: hit(text, 'greeting'),
+    isPleasantry: isPleasantry(text),
     isQuestion,
   };
 }

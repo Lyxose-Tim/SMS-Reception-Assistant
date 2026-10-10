@@ -47,9 +47,12 @@ export function profileText(p: BusinessProfile): string {
   return lines.join('\n');
 }
 
-export function validateKnowledge(profile: BusinessProfile, faqs: Faq[]): KnowledgeIssue[] {
+export function validateKnowledge(profile: BusinessProfile, faqs: Faq[], name?: string): KnowledgeIssue[] {
   const L = KNOWLEDGE_LIMITS;
   const issues: KnowledgeIssue[] = [];
+  if (name !== undefined && name.length > MAX_NAME_CHARS) {
+    issues.push({ path: 'name', code: 'too_long', limit: MAX_NAME_CHARS, actual: name.length });
+  }
   const profileLength = profileText(profile).length;
   if (profileLength > L.profileChars) {
     issues.push({ path: 'profile', code: 'too_long', limit: L.profileChars, actual: profileLength });
@@ -79,6 +82,11 @@ export function validateKnowledge(profile: BusinessProfile, faqs: Faq[]): Knowle
 
 function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
+/** Business name as it appears in prompts: clipped to MAX_NAME_CHARS. */
+export function clipName(name: string): string {
+  return clip(name, MAX_NAME_CHARS);
 }
 
 /**

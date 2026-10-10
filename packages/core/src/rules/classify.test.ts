@@ -89,3 +89,27 @@ describe('isExplicitQuestion', () => {
     expect(isExplicitQuestion(text)).toBe(expected);
   });
 });
+
+describe('classify pleasantries', () => {
+  it.each([
+    'thanks', 'Thanks!', 'thank you', 'thanks a lot', 'thx', 'ok', 'OK.', 'okay', 'great', 'cool', 'got it',
+    'bye', 'goodbye', 'see you', 'no problem', 'perfect', 'thanks 🙏',
+    '谢谢', '多谢', '谢啦', '好的', '好', '嗯', '行', '知道了', '再见', '拜拜', '没事', '没事了', '谢谢！', '好的。',
+  ])('%s is a pleasantry', (text) => {
+    expect(classify(text).isPleasantry).toBe(true);
+  });
+
+  it.each(['thanks, what are your hours?', 'ok book me in', '谢谢你们几点开门', 'Alex', 'hello'])(
+    '%s is not a pleasantry',
+    (text) => {
+      expect(classify(text).isPleasantry).toBe(false);
+    },
+  );
+
+  it('does not treat 工作人员 mentioned in a question as a human request', () => {
+    expect(classify('工作人员有保险吗').wantsHuman).toBe(false);
+    expect(classify('我要找工作人员').wantsHuman).toBe(true);
+    expect(classify('转工作人员').wantsHuman).toBe(true);
+    expect(classify('请联系工作人员').wantsHuman).toBe(true);
+  });
+});

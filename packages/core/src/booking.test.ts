@@ -213,3 +213,22 @@ describe('hardening: setDraftFields untrusted boundary', () => {
     expect(draft.awaiting).toBe('contact');
   });
 });
+
+describe('extractContact: dates and times are never contacts', () => {
+  it('rejects a date followed by a time', () => {
+    expect(extractContact('book a deep cleaning on 2026-10-12 14:30')).toBeNull();
+    expect(extractContact('12.10.2026 09:00')).toBeNull();
+  });
+
+  it('skips a rejected candidate and returns a later real phone', () => {
+    expect(extractContact('2026-10-12 14:30 or call 13800138000')).toBe('13800138000');
+  });
+
+  it('accepts a phone that is followed by a time of day', () => {
+    expect(extractContact('call +1 (202) 555-0123 at 14:30')).toBe('+1 (202) 555-0123');
+  });
+
+  it('rejects a number directly followed by a time', () => {
+    expect(extractContact('call 13800138000:30')).toBeNull();
+  });
+});

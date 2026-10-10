@@ -43,7 +43,7 @@ export function respondWithRules(
   const c = classify(text);
   const services = k.profile.services;
 
-  if (draft && c.wantsCancel && !isExplicitQuestion(text)) {
+  if (draft && c.wantsCancel && !c.isQuestion && !isExplicitQuestion(text)) {
     return { replies: [t(locale, 'booking_cancelled')], bookingDraft: null };
   }
   if (c.wantsHuman) {
@@ -54,12 +54,16 @@ export function respondWithRules(
       const answer = answerQuestion(k, text, c, locale);
       if (answer) return { replies: [answer], bookingDraft: null };
     }
+    // Only the explicit words cancel/取消 mean "change an existing appointment"; "never mind" alone is small talk.
+    if (!EXPLICIT_CANCEL.test(text)) return { replies: [t(locale, 'nevermind_reply')], bookingDraft: null };
     return { replies: [t(locale, 'cancel_existing')], bookingDraft: null, handoff: { reason: 'visitor_request' } };
   }
+  if (!draft && c.isPleasantry) return { replies: [t(locale, 'pleasantry_reply')], bookingDraft: null };
   if (draft) {
     const awaited = k.bookingFields.find((d) => d.key === draft.awaiting) ?? nextMissingField(k.bookingFields, draft);
     const ask = awaited ? [askFor(awaited, locale, services)] : [];
-    if (isExplicitQuestion(text)) {
+    if (c.isPleasantry) return { replies: ask, bookingDraft: refreshed(draft, now) };
+    if (isDraftQuestion(text, c, awaited?.key)) {
       const answer = answerQuestion(k, text, c, locale);
       return { replies: [answer ?? t(locale, 'booking_question_unanswered'), ...ask], bookingDraft: refreshed(draft, now) };
     }
@@ -74,6 +78,20 @@ export function respondWithRules(
   if (answer) return { replies: [answer], bookingDraft: null };
   if (c.isGreeting) return { replies: [t(locale, 'greeting_menu')], bookingDraft: null };
   return { replies: [t(locale, 'unknown_question')], bookingDraft: null, handoff: { reason: 'unknown_question' } };
+}
+
+const EXPLICIT_CANCEL = /\bcancel\b|取消/i;
+/** Text this short that names a topic ("price", "多少钱") is a question even without punctuation. */
+const SHORT_TEXT_CHARS = 12;
+
+/** Inside a draft, decides whether a message is a visitor question (answer + re-ask) rather than a field value. */
+function isDraftQuestion(text: string, c: Classification, awaitedKey: string | undefined): boolean {
+  if (isExplicitQuestion(text)) return true;
+  // "周六几点都可以" answers the preferred_time prompt: an hours keyword alone does not make it a question.
+  const topics = c.topics.filter((topic) => !(topic === 'hours' && awaitedKey === 'preferred_time'));
+  if (topics.length > 0 && (c.isQuestion || text.trim().length <= SHORT_TEXT_CHARS)) return true;
+  // "怎么取消" / "how to cancel": a question about cancelling, never a field value.
+  return c.wantsCancel && c.isQuestion;
 }
 
 /** Copy of a draft kept for another turn: TTL restarts, the caller's draft is never mutated. */

@@ -26,3 +26,22 @@ describe('cleanText', () => {
     expect(cleanText('a\nb\tc')).toBe('a\nb\tc');
   });
 });
+
+describe('neutralizeTags: unterminated tags', () => {
+  it('neutralizes a trailing reserved tag with no closing bracket', () => {
+    expect(neutralizeTags('hello </visitor_message')).toBe('hello ‹/visitor_message');
+    expect(neutralizeTags('x <business_info')).toBe('x ‹business_info');
+  });
+
+  it('leaves terminated-tag output and ordinary text unchanged', () => {
+    expect(neutralizeTags('a</visitor_message>b')).toBe('a‹/visitor_message›b');
+    expect(neutralizeTags('1 < 2 and visitor_message')).toBe('1 < 2 and visitor_message');
+    expect(neutralizeTags('<business_infox')).toBe('<business_infox');
+  });
+});
+
+describe('cleanText: invisible characters', () => {
+  it('strips zero-width and bidi control characters', () => {
+    expect(cleanText('a​b‏c‪d‮e⁠f⁤g﻿h')).toBe('abcdefgh');
+  });
+});

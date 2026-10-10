@@ -16,6 +16,8 @@ const en = {
   booking_submitted:
     'Thanks! Your request has been recorded and is pending confirmation. {business} will contact you at {contact} to confirm. You can close this window now.',
   booking_cancelled: "No problem, I've cancelled this booking request.",
+  pleasantry_reply: "You're welcome! Let me know if there's anything else I can help with.",
+  nevermind_reply: "No problem. Let me know if there's anything else I can help with.",
   booking_question_unanswered:
     "I can't answer that here, but a team member can help after your request is submitted.",
   cancel_existing:
@@ -44,6 +46,8 @@ const zh: Record<TemplateKey, string> = {
   booking_invalid_text: '抱歉，这一项请简短回答。',
   booking_submitted: '谢谢！您的预约申请已记录，正在等待确认。{business}会通过 {contact} 与您确认，您现在可以关闭此窗口。',
   booking_cancelled: '好的，已取消本次预约登记。',
+  pleasantry_reply: '不客气！如果还有其他问题，随时告诉我。',
+  nevermind_reply: '好的，如有其他需要随时告诉我。',
   booking_question_unanswered: '这个问题我暂时无法回答，提交预约后工作人员可以为您解答。',
   cancel_existing: '修改或取消已有预约需要工作人员处理，已为您转接，他们会在这里回复您。',
   booking_expired: '之前填写的预约信息已过期，我们重新开始。',

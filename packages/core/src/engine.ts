@@ -47,6 +47,9 @@ export async function handleVisitorMessage(
   const { business: k, conversation: conv, now } = ctx;
   const locale = resolveLocale(text, conv.locale, ctx.localeHint);
 
+  if (!text) {
+    return { replies: [], locale, bookingDraft: conv.bookingDraft, meta: { engine: 'none' } };
+  }
   if (conv.status !== 'bot') {
     return { replies: [], locale, bookingDraft: conv.bookingDraft, meta: { engine: 'none' } };
   }

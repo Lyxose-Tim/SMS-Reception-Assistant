@@ -373,3 +373,14 @@ describe('prompt-injection isolation', () => {
     expect(last.content).not.toContain('<business_info>');
   });
 });
+
+describe('handleVisitorMessage: empty input', () => {
+  it('stays silent with no handoff when the cleaned text is empty', async () => {
+    const draft: BookingDraft = { fields: { service: 'Deep cleaning' }, awaiting: 'preferred_time', updatedAt: now.toISOString() };
+    const result = await handleVisitorMessage(ctx({ bookingDraft: draft }), '\u0000\u0007 ');
+    expect(result.replies).toEqual([]);
+    expect(result.handoff).toBeUndefined();
+    expect(result.bookingDraft).toBe(draft);
+    expect(result.meta).toEqual({ engine: 'none' });
+  });
+});

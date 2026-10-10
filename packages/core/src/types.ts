@@ -125,7 +125,7 @@ export interface EngineResult {
 
 export const DEFAULT_BOOKING_FIELDS: BookingFieldDef[] = [
   { key: 'service', label: { en: 'service', 'zh-CN': '服务项目' }, kind: 'service', required: true },
-  { key: 'preferred_time', label: { en: 'preferred date and time', 'zh-CN': '期望的日期和时间' }, kind: 'text', required: true },
+  { key: 'preferred_time', label: { en: 'preferred date and time', 'zh-CN': '期望日期和时间' }, kind: 'text', required: true },
   { key: 'name', label: { en: 'name', 'zh-CN': '姓名' }, kind: 'text', required: true },
   { key: 'contact', label: { en: 'email or phone number', 'zh-CN': '邮箱或电话' }, kind: 'contact', required: true },
   { key: 'notes', label: { en: 'notes', 'zh-CN': '备注' }, kind: 'text', required: false },

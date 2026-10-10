@@ -253,7 +253,7 @@ describe('respondWithRules: Chinese booking', () => {
 
     out = respondWithRules(k, '2', 'zh-CN', out.bookingDraft, now);
     expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning' });
-    expect(out.replies).toEqual(['请提供您的期望的日期和时间。']);
+    expect(out.replies).toEqual(['请提供您的期望日期和时间。']);
 
     out = respondWithRules(k, '周六上午', 'zh-CN', out.bookingDraft, now);
     expect(out.replies).toEqual(['请提供您的姓名。']);
@@ -267,5 +267,145 @@ describe('respondWithRules: Chinese booking', () => {
       fields: { service: 'Deep cleaning', preferred_time: '周六上午', name: '小李', contact: '13800138000' },
     });
     expect(out.replies[0]).toContain('正在等待确认');
+  });
+});
+
+describe('respondWithRules: pleasantries and never mind', () => {
+  it.each([
+    ['thanks', 'en'],
+    ['thanks!', 'en'],
+    ['ok', 'en'],
+    ['bye', 'en'],
+    ['谢谢', 'zh-CN'],
+    ['好的', 'zh-CN'],
+    ['再见', 'zh-CN'],
+  ] as const)('replies politely to %j without a handoff', (text, locale) => {
+    const out = respondWithRules(k, text, locale, null, now);
+    expect(out.replies).toEqual([t(locale, 'pleasantry_reply')]);
+    expect(out.handoff).toBeUndefined();
+    expect(out.bookingDraft).toBeNull();
+  });
+
+  it('uses the fixed pleasantry templates', () => {
+    expect(t('en', 'pleasantry_reply')).toBe("You're welcome! Let me know if there's anything else I can help with.");
+    expect(t('zh-CN', 'pleasantry_reply')).toBe('不客气！如果还有其他问题，随时告诉我。');
+    expect(t('en', 'nevermind_reply')).toBe("No problem. Let me know if there's anything else I can help with.");
+    expect(t('zh-CN', 'nevermind_reply')).toBe('好的，如有其他需要随时告诉我。');
+  });
+
+  it('does not hand off on thanks right after a submitted booking (draft null)', () => {
+    const draft: BookingDraft = {
+      fields: { service: 'Deep cleaning', preferred_time: 'Sat', name: 'Alex' },
+      awaiting: 'contact',
+      updatedAt: now.toISOString(),
+    };
+    const submitted = respondWithRules(k, 'alex@example.com', 'en', draft, now);
+    expect(submitted.bookingRequest).toBeDefined();
+    const out = respondWithRules(k, 'thanks', 'en', submitted.bookingDraft, now);
+    expect(out.replies).toEqual([t('en', 'pleasantry_reply')]);
+    expect(out.handoff).toBeUndefined();
+  });
+
+  it.each([
+    ['never mind', 'en'],
+    ['nevermind', 'en'],
+    ['forget it', 'en'],
+    ['算了', 'zh-CN'],
+    ['不约了', 'zh-CN'],
+  ] as const)('answers %j with no draft politely and without a handoff', (text, locale) => {
+    const out = respondWithRules(k, text, locale, null, now);
+    expect(out.replies).toEqual([t(locale, 'nevermind_reply')]);
+    expect(out.handoff).toBeUndefined();
+    expect(out.bookingDraft).toBeNull();
+  });
+
+  it('still hands off an explicit cancel without a draft', () => {
+    for (const [text, locale] of [['cancel', 'en'], ['取消', 'zh-CN']] as const) {
+      const out = respondWithRules(k, text, locale, null, now);
+      expect(out.replies).toEqual([t(locale, 'cancel_existing')]);
+      expect(out.handoff).toEqual({ reason: 'visitor_request' });
+    }
+  });
+
+  it('still cancels a draft on never mind', () => {
+    const draft: BookingDraft = { fields: { service: 'Deep cleaning' }, awaiting: 'preferred_time', updatedAt: now.toISOString() };
+    const out = respondWithRules(k, 'never mind', 'en', draft, now);
+    expect(out.bookingDraft).toBeNull();
+    expect(out.replies).toEqual([t('en', 'booking_cancelled')]);
+  });
+
+  it('re-asks the awaited field on thanks inside a draft and stores nothing', () => {
+    const draft: BookingDraft = {
+      fields: { service: 'Deep cleaning', preferred_time: 'Sat' },
+      awaiting: 'name',
+      updatedAt: '2026-10-09T08:00:00.000Z',
+    };
+    const out = respondWithRules(k, 'thanks', 'en', draft, now);
+    expect(out.replies).toEqual(['Could you share your name?']);
+    expect(out.handoff).toBeUndefined();
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.bookingDraft?.awaiting).toBe('name');
+    expect(out.bookingDraft?.updatedAt).toBe(now.toISOString());
+  });
+});
+
+describe('respondWithRules: dates are not contacts', () => {
+  it('starts a booking from a date+time message without a contact', () => {
+    const out = respondWithRules(k, "I'd like to book a deep cleaning on 2026-10-12 14:30", 'en', null, now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning' });
+    expect(out.bookingDraft?.fields.contact).toBeUndefined();
+  });
+
+  it('does the same in Chinese', () => {
+    const out = respondWithRules(k, '预约深度清洁 2026-10-12 14:30', 'zh-CN', null, now);
+    expect(out.bookingDraft?.fields.contact).toBeUndefined();
+    expect(out.bookingDraft).not.toBeNull();
+  });
+});
+
+describe('respondWithRules: unpunctuated topic questions inside a draft', () => {
+  const awaitingTime = (): BookingDraft => ({
+    fields: { service: 'Deep cleaning' },
+    awaiting: 'preferred_time',
+    updatedAt: '2026-10-09T08:00:00.000Z',
+  });
+  const awaitingName = (): BookingDraft => ({
+    fields: { service: 'Deep cleaning', preferred_time: 'Sat' },
+    awaiting: 'name',
+    updatedAt: now.toISOString(),
+  });
+
+  it('answers a bare "price" and re-asks the time without storing', () => {
+    const out = respondWithRules(k, 'price', 'en', awaitingTime(), now);
+    expect(out.replies[0]).toContain('Deep cleaning: Starting at $220');
+    expect(out.replies.at(-1)).toBe('Could you share your preferred date and time?');
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning' });
+    expect(out.bookingDraft?.awaiting).toBe('preferred_time');
+  });
+
+  it('answers 多少钱 and re-asks the time without storing', () => {
+    const out = respondWithRules(k, '多少钱', 'zh-CN', awaitingTime(), now);
+    expect(out.replies[0]).toContain('Deep cleaning: Starting at $220');
+    expect(out.replies.at(-1)).toBe('请提供您的期望日期和时间。');
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning' });
+  });
+
+  it('answers 你们服务哪些地区 while awaiting the name and stores nothing', () => {
+    const out = respondWithRules(k, '你们服务哪些地区', 'zh-CN', awaitingName(), now);
+    expect(out.replies).toEqual([`服务区域：${k.profile.serviceAreas.join(', ')}。`, '请提供您的姓名。']);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+  });
+
+  it('does not cancel the draft on 怎么取消', () => {
+    const out = respondWithRules(k, '怎么取消', 'zh-CN', awaitingName(), now);
+    expect(out.bookingDraft).not.toBeNull();
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.replies.at(-1)).toBe('请提供您的姓名。');
+  });
+
+  it('does not cancel the draft on "how to cancel"', () => {
+    const out = respondWithRules(k, 'how to cancel', 'en', awaitingName(), now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.replies.at(-1)).toBe('Could you share your name?');
   });
 });

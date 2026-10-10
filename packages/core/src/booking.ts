@@ -13,9 +13,11 @@ export type FieldError = 'invalid_contact' | 'invalid_service' | 'invalid_text';
 export type FieldParse = { ok: true; value: string } | { ok: false; error: FieldError };
 
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
-const PHONE = /\+?\d[\d\s().-]{5,}\d/;
-const DATE_YMD = /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/;
-const DATE_DMY = /^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/;
+const PHONE = /\+?\d[\d\s().-]{5,}\d/g;
+// PHONE never contains "/", so slash dates (10/12/2026) never form a candidate in the first place.
+const DATE_YMD = /^\d{4}[-.]\d{1,2}[-.]\d{1,2}/;
+const DATE_DMY = /^\d{1,2}[-.]\d{1,2}[-.]\d{2,4}(\b|\s)/;
+const TIME_SUFFIX = /^:\d/;
 
 export function newDraft(now: Date): BookingDraft {
   return { fields: {}, awaiting: null, updatedAt: now.toISOString() };
@@ -39,13 +41,15 @@ export function extractContact(text: string): string | null {
   const scanned = text.slice(0, MAX_SCAN_CHARS);
   const email = EMAIL.exec(scanned);
   if (email) return email[0].length <= MAX_EMAIL_CHARS ? email[0] : null;
-  const phone = PHONE.exec(scanned);
-  if (!phone) return null;
-  const candidate = phone[0].trim();
-  const digits = candidate.replace(/\D/g, '').length;
-  if (digits < 7 || digits > MAX_PHONE_DIGITS) return null;
-  if (DATE_YMD.test(candidate) || DATE_DMY.test(candidate)) return null;
-  return candidate;
+  for (const match of scanned.matchAll(PHONE)) {
+    const candidate = match[0].trim();
+    const digits = candidate.replace(/\D/g, '').length;
+    if (digits < 7 || digits > MAX_PHONE_DIGITS) continue;
+    if (DATE_YMD.test(candidate) || DATE_DMY.test(candidate)) continue;
+    if (TIME_SUFFIX.test(scanned.slice(match.index + match[0].length, match.index + match[0].length + 2))) continue;
+    return candidate;
+  }
+  return null;
 }
 
 function escapeRegExp(text: string): string {
