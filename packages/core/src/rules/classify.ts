@@ -40,6 +40,11 @@ const ZH: Record<Signal, string[]> = {
 const QUESTION_START = /^\s*(what|when|where|how|do|does|are|is|can|could|which|who|will|would)\b/i;
 const ZH_QUESTION = ['吗', '什么', '怎么', '多少', '哪', '几', '是否'];
 
+/** Punctuation or an English question opener; deliberately ignores Chinese question words (e.g. 几) that also appear in plain answers. */
+export function isExplicitQuestion(text: string): boolean {
+  return /[?？]/.test(text) || QUESTION_START.test(text);
+}
+
 function hit(text: string, signal: Signal): boolean {
   return EN[signal].test(text) || ZH[signal].some((word) => text.includes(word));
 }
@@ -50,7 +55,7 @@ function isQuantityQuestion(text: string): boolean {
 }
 
 export function classify(text: string): Classification {
-  const isQuestion = /[?？]/.test(text) || QUESTION_START.test(text) || ZH_QUESTION.some((w) => text.includes(w));
+  const isQuestion = isExplicitQuestion(text) || ZH_QUESTION.some((w) => text.includes(w));
   return {
     topics: TOPICS.filter((topic) => hit(text, topic) && !(topic === 'hours' && isQuantityQuestion(text))),
     wantsBooking: hit(text, 'booking'),

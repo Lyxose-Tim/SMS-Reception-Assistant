@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { demoKnowledge } from '../demo';
 import type { BookingDraft } from '../types';
+import { t } from '../templates';
 import { respondWithRules } from './respond';
 
 const k = demoKnowledge();
@@ -92,5 +93,126 @@ describe('respondWithRules: booking', () => {
     const out = respondWithRules(k, 'cancel', 'en', draft, now);
     expect(out.bookingDraft).toBeNull();
     expect(out.replies).toEqual(["No problem, I've cancelled this booking request."]);
+  });
+});
+
+describe('respondWithRules: cancel without a draft', () => {
+  it('hands off an existing-appointment cancel instead of starting a booking', () => {
+    const out = respondWithRules(k, 'I want to cancel my appointment', 'en', null, now);
+    expect(out.handoff).toEqual({ reason: 'visitor_request' });
+    expect(out.bookingDraft).toBeNull();
+    expect(out.replies).toEqual([t('en', 'cancel_existing')]);
+  });
+
+  it('does the same in Chinese', () => {
+    const out = respondWithRules(k, '取消预约', 'zh-CN', null, now);
+    expect(out.handoff).toEqual({ reason: 'visitor_request' });
+    expect(out.bookingDraft).toBeNull();
+    expect(out.replies).toEqual([t('zh-CN', 'cancel_existing')]);
+  });
+});
+
+describe('respondWithRules: active draft keeps junk out of fields', () => {
+  const awaitingName = (): BookingDraft => ({
+    fields: { service: 'Deep cleaning', preferred_time: 'Sat' },
+    awaiting: 'name',
+    updatedAt: '2026-10-09T08:00:00.000Z',
+  });
+
+  it('does not store an unanswerable question as the name', () => {
+    const out = respondWithRules(k, 'Do you clean swimming pools?', 'en', awaitingName(), now);
+    expect(out.replies).toEqual([t('en', 'booking_question_unanswered'), 'Could you share your name?']);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.bookingDraft?.awaiting).toBe('name');
+    expect(out.bookingDraft?.updatedAt).toBe(now.toISOString());
+  });
+
+  it('does not store a greeting as the name', () => {
+    const out = respondWithRules(k, 'hello', 'en', awaitingName(), now);
+    expect(out.replies).toEqual(['Could you share your name?']);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.bookingDraft?.updatedAt).toBe(now.toISOString());
+  });
+
+  it('does not store restated booking intent as the name', () => {
+    const out = respondWithRules(k, "I'd like to book a deep cleaning", 'en', awaitingName(), now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+    expect(out.replies).toEqual(['Could you share your name?']);
+  });
+
+  it('opportunistically fills a contact from restated booking intent', () => {
+    const draft: BookingDraft = {
+      fields: { service: 'Deep cleaning', preferred_time: 'Sat', name: 'Alex' },
+      awaiting: 'contact',
+      updatedAt: now.toISOString(),
+    };
+    const out = respondWithRules(k, 'I want to book, my email is alex@example.com', 'en', draft, now);
+    expect(out.bookingDraft).toBeNull();
+    expect(out.bookingRequest?.fields.contact).toBe('alex@example.com');
+  });
+
+  it('treats a Chinese answer containing 几 as a field value, not a question', () => {
+    const draft: BookingDraft = { fields: { service: 'Deep cleaning' }, awaiting: 'preferred_time', updatedAt: now.toISOString() };
+    const out = respondWithRules(k, '周六几点都可以', 'zh-CN', draft, now);
+    expect(out.bookingDraft?.fields.preferred_time).toBe('周六几点都可以');
+    expect(out.replies).toEqual(['请提供您的姓名。']);
+  });
+
+  it('does not cancel the draft on an explicit question about cancelling', () => {
+    const out = respondWithRules(k, 'how do I cancel?', 'en', awaitingName(), now);
+    expect(out.bookingDraft).not.toBeNull();
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
+  });
+});
+
+describe('respondWithRules: draft TTL refresh', () => {
+  const stale = (): BookingDraft => ({
+    fields: { service: 'Deep cleaning', preferred_time: 'Sat', name: 'Alex' },
+    awaiting: 'contact',
+    updatedAt: '2026-10-09T08:00:00.000Z',
+  });
+
+  it('refreshes updatedAt on an invalid value without mutating the input', () => {
+    const draft = stale();
+    const before = structuredClone(draft);
+    const out = respondWithRules(k, 'not sure', 'en', draft, now);
+    expect(draft).toEqual(before);
+    expect(out.bookingDraft).not.toBe(draft);
+    expect(out.bookingDraft?.updatedAt).toBe(now.toISOString());
+    expect(out.bookingDraft?.fields).toEqual(before.fields);
+  });
+
+  it('refreshes updatedAt on a mid-booking answer without mutating the input', () => {
+    const draft = stale();
+    const before = structuredClone(draft);
+    const out = respondWithRules(k, 'Do you bring supplies?', 'en', draft, now);
+    expect(draft).toEqual(before);
+    expect(out.bookingDraft).not.toBe(draft);
+    expect(out.bookingDraft?.updatedAt).toBe(now.toISOString());
+    expect(out.bookingDraft?.awaiting).toBe('contact');
+  });
+});
+
+describe('respondWithRules: Chinese booking', () => {
+  it('collects all fields across turns and submits', () => {
+    let out = respondWithRules(k, '我想预约', 'zh-CN', null, now);
+    expect(out.replies[0]).toContain('您想预约哪项服务');
+
+    out = respondWithRules(k, '2', 'zh-CN', out.bookingDraft, now);
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning' });
+    expect(out.replies).toEqual(['请提供您的期望的日期和时间。']);
+
+    out = respondWithRules(k, '周六上午', 'zh-CN', out.bookingDraft, now);
+    expect(out.replies).toEqual(['请提供您的姓名。']);
+
+    out = respondWithRules(k, '小李', 'zh-CN', out.bookingDraft, now);
+    expect(out.replies).toEqual(['请留下可以联系到您的邮箱或电话。']);
+
+    out = respondWithRules(k, '13800138000', 'zh-CN', out.bookingDraft, now);
+    expect(out.bookingDraft).toBeNull();
+    expect(out.bookingRequest).toEqual({
+      fields: { service: 'Deep cleaning', preferred_time: '周六上午', name: '小李', contact: '13800138000' },
+    });
+    expect(out.replies[0]).toContain('正在等待确认');
   });
 });

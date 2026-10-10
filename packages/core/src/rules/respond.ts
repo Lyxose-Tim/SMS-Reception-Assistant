@@ -17,7 +17,7 @@ import type {
   HandoffReason,
   Locale,
 } from '../types';
-import { classify, type Classification, type Topic } from './classify';
+import { classify, isExplicitQuestion, type Classification, type Topic } from './classify';
 import { matchFaq } from './faqMatch';
 
 export interface RulesOutcome {
@@ -43,26 +43,38 @@ export function respondWithRules(
   const c = classify(text);
   const services = k.profile.services;
 
-  if (draft && c.wantsCancel && !c.isQuestion) {
+  if (draft && c.wantsCancel && !isExplicitQuestion(text)) {
     return { replies: [t(locale, 'booking_cancelled')], bookingDraft: null };
   }
   if (c.wantsHuman) {
     return { replies: [t(locale, 'handoff')], bookingDraft: draft, handoff: { reason: 'visitor_request' } };
   }
-  if (draft) {
-    const answer = c.isQuestion ? answerQuestion(k, text, c, locale) : null;
-    if (answer) {
-      const awaited = k.bookingFields.find((d) => d.key === draft.awaiting) ?? nextMissingField(k.bookingFields, draft);
-      return { replies: awaited ? [answer, askFor(awaited, locale, services)] : [answer], bookingDraft: draft };
-    }
-    return bookingStep(k, draft, text, locale, now);
+  if (!draft && c.wantsCancel && !c.isQuestion) {
+    return { replies: [t(locale, 'cancel_existing')], bookingDraft: null, handoff: { reason: 'visitor_request' } };
   }
-  if (c.wantsBooking) return bookingStep(k, null, text, locale, now);
+  if (draft) {
+    const awaited = k.bookingFields.find((d) => d.key === draft.awaiting) ?? nextMissingField(k.bookingFields, draft);
+    const ask = awaited ? [askFor(awaited, locale, services)] : [];
+    if (isExplicitQuestion(text)) {
+      const answer = answerQuestion(k, text, c, locale);
+      return { replies: [answer ?? t(locale, 'booking_question_unanswered'), ...ask], bookingDraft: refreshed(draft, now) };
+    }
+    if (c.isGreeting && !c.topics.length && !c.wantsBooking && !extractContact(text)) {
+      return { replies: ask, bookingDraft: refreshed(draft, now) };
+    }
+    return bookingStep(k, draft, text, locale, now, !c.wantsBooking);
+  }
+  if (c.wantsBooking) return bookingStep(k, null, text, locale, now, false);
 
   const answer = answerQuestion(k, text, c, locale);
   if (answer) return { replies: [answer], bookingDraft: null };
   if (c.isGreeting) return { replies: [t(locale, 'greeting_menu')], bookingDraft: null };
   return { replies: [t(locale, 'unknown_question')], bookingDraft: null, handoff: { reason: 'unknown_question' } };
+}
+
+/** Copy of a draft kept for another turn: TTL restarts, the caller's draft is never mutated. */
+function refreshed(draft: BookingDraft, now: Date): BookingDraft {
+  return { ...draft, fields: { ...draft.fields }, updatedAt: now.toISOString() };
 }
 
 function answerQuestion(k: BusinessKnowledge, text: string, c: Classification, locale: Locale): string | null {
@@ -99,16 +111,17 @@ function bookingStep(
   text: string,
   locale: Locale,
   now: Date,
+  storeAnswer: boolean,
 ): RulesOutcome {
   const defs = k.bookingFields;
   const services = k.profile.services;
   const next: BookingDraft = draft ? { ...draft, fields: { ...draft.fields } } : newDraft(now);
   const awaited = next.awaiting ? defs.find((d) => d.key === next.awaiting) : undefined;
 
-  if (awaited) {
+  if (awaited && storeAnswer) {
     const parsed = parseFieldValue(awaited, text, services);
     if (!parsed.ok) {
-      return { replies: [t(locale, FIELD_ERROR_TEMPLATE[parsed.error]), askFor(awaited, locale, services)], bookingDraft: draft };
+      return { replies: [t(locale, FIELD_ERROR_TEMPLATE[parsed.error]), askFor(awaited, locale, services)], bookingDraft: refreshed(next, now) };
     }
     next.fields[awaited.key] = parsed.value;
   } else {

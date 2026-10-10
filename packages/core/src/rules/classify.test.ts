@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classify } from './classify';
+import { classify, isExplicitQuestion } from './classify';
 
 describe('classify topics', () => {
   it.each([
@@ -73,3 +73,14 @@ describe('classify precision fixes', () => {
   });
 });
 
+
+describe('isExplicitQuestion', () => {
+  it.each([
+    ['What are your hours', true],
+    ['周六可以吗？', true],
+    ['周六几点都可以', false],
+    ['Saturday morning', false],
+  ])('%s → %s', (text, expected) => {
+    expect(isExplicitQuestion(text)).toBe(expected);
+  });
+});
