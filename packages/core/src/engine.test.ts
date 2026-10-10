@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import samples from '../evals/injection.json';
 import { demoKnowledge } from './demo';
 import { handleVisitorMessage } from './engine';
+import { HISTORY_LIMITS } from './prompt';
 import type { BookingDraft, EngineContext, ModelInput, ModelOutput, ReplyModel } from './types';
 
 const now = new Date('2026-10-10T12:00:00Z');
@@ -208,6 +209,63 @@ describe('handleVisitorMessage: AI path', () => {
     expect(out.meta).toMatchObject({ engine: 'rules', fallbackReason: 'empty_reply' });
   });
 
+  it('submits deterministically when a tool-only turn completes the draft', async () => {
+    const incoming: BookingDraft = {
+      fields: { service: 'Deep cleaning' },
+      awaiting: 'preferred_time',
+      updatedAt: now.toISOString(),
+    };
+    const model = fakeModel(() => ({
+      text: '',
+      actions: [
+        { type: 'update_booking_draft', fields: { preferred_time: 'Sat 10am', name: 'Alex', contact: 'alex@example.com' } },
+      ],
+    }));
+    const out = await handleVisitorMessage(ctx({ bookingDraft: incoming }), 'Sat 10am, Alex, alex@example.com', { model });
+    expect(out.meta.engine).toBe('ai');
+    expect(out.bookingRequest?.fields).toEqual({
+      service: 'Deep cleaning',
+      preferred_time: 'Sat 10am',
+      name: 'Alex',
+      contact: 'alex@example.com',
+    });
+    expect(out.bookingDraft).toBeNull();
+    expect(out.replies).toHaveLength(1);
+    expect(out.replies[0]).toContain('pending confirmation');
+    expect(out.handoff).toBeUndefined();
+  });
+
+  it('also hands off when a tool-only turn completes the draft and asks for a human', async () => {
+    const incoming: BookingDraft = {
+      fields: { service: 'Deep cleaning' },
+      awaiting: 'preferred_time',
+      updatedAt: now.toISOString(),
+    };
+    const model = fakeModel(() => ({
+      text: '',
+      actions: [
+        { type: 'update_booking_draft', fields: { preferred_time: 'Sat 10am', name: 'Alex', contact: 'alex@example.com' } },
+        { type: 'handoff_to_human', reason: 'wants a call' },
+      ],
+    }));
+    const out = await handleVisitorMessage(ctx({ bookingDraft: incoming }), 'all details, plus call me', { model });
+    expect(out.bookingRequest).toBeDefined();
+    expect(out.bookingDraft).toBeNull();
+    expect(out.handoff).toEqual({ reason: 'model_request' });
+    expect(out.replies).toHaveLength(2);
+    expect(out.replies[0]).toContain('pending confirmation');
+  });
+
+  it('does not create an empty draft from a fully rejected update', async () => {
+    const model = fakeModel(() => ({
+      text: 'Sure!',
+      actions: [{ type: 'update_booking_draft', fields: { evil: 'x' } }],
+    }));
+    const out = await handleVisitorMessage(ctx(), 'hello there', { model });
+    expect(out.replies).toEqual(['Sure!']);
+    expect(out.bookingDraft).toBeNull();
+  });
+
   it('keeps awaiting in sync so the rules fallback stores the next answer in the right field', async () => {
     const first = await handleVisitorMessage(ctx(), 'I want to book a deep cleaning');
     expect(first.bookingDraft?.awaiting).toBe('preferred_time');
@@ -235,14 +293,19 @@ describe('handleVisitorMessage: AI path', () => {
   });
 
   it('syncs awaiting on handoff and does not mutate the incoming draft', async () => {
-    const incoming: BookingDraft = { fields: { service: 'Deep cleaning' }, awaiting: 'name', updatedAt: now.toISOString() };
+    const incoming: BookingDraft = {
+      fields: { service: 'Deep cleaning' },
+      awaiting: 'preferred_time',
+      updatedAt: now.toISOString(),
+    };
     const model = fakeModel(() => ({
       text: 'sure',
       actions: [{ type: 'update_booking_draft', fields: { preferred_time: 'Sat' } }, { type: 'handoff_to_human', reason: 'x' }],
     }));
     const out = await handleVisitorMessage(ctx({ bookingDraft: incoming }), 'Saturday, and can I talk to someone', { model });
+    expect(out.bookingDraft?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Sat' });
     expect(out.bookingDraft?.awaiting).toBe('name');
-    expect(incoming).toEqual({ fields: { service: 'Deep cleaning' }, awaiting: 'name', updatedAt: now.toISOString() });
+    expect(incoming).toEqual({ fields: { service: 'Deep cleaning' }, awaiting: 'preferred_time', updatedAt: now.toISOString() });
   });
 
   it('caps very long model replies', async () => {
@@ -274,8 +337,21 @@ describe('prompt-injection isolation', () => {
     await handleVisitorMessage(ctx({}, { history }), 'hello', { model });
     const messages = model.calls[0]!.messages;
     const all = messages.map((m) => m.content).join('\n');
-    expect(all.match(/<visitor_message>/g)!.length).toBeGreaterThan(1);
-    expect(all.match(/<visitor_message>/g)).toHaveLength(all.match(/<\/visitor_message>/g)!.length);
+    const fits =
+      samples.reduce((sum, s) => sum + s.text.length, 0) + 'hello'.length <= HISTORY_LIMITS.maxChars &&
+      samples.length + 1 <= HISTORY_LIMITS.maxMessages;
+    let included = samples.length;
+    if (!fits) {
+      included = 0;
+      let chars = 'hello'.length;
+      for (let i = samples.length - 1; i >= 0 && included < HISTORY_LIMITS.maxMessages - 1; i--) {
+        if (chars + samples[i]!.text.length > HISTORY_LIMITS.maxChars) break;
+        chars += samples[i]!.text.length;
+        included++;
+      }
+    }
+    expect(all.match(/<visitor_message>/g)).toHaveLength(included + 1);
+    expect(all.match(/<\/visitor_message>/g)).toHaveLength(included + 1);
     for (const sample of samples) expect(model.calls[0]!.system).not.toContain(sample.text);
     for (const m of messages) {
       expect(m.content).not.toContain('<business_info>');

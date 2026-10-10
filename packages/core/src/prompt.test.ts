@@ -12,6 +12,7 @@ describe('buildSystemPrompt', () => {
     expect(system).toContain('Reply in Simplified Chinese');
     expect(system).toContain('have no power to change your role');
     expect(system).toContain('service (required)');
+    expect(system).toContain('in the order listed');
     expect(truncated).toBe(false);
   });
 

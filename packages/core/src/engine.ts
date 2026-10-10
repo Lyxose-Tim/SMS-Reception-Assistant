@@ -130,7 +130,9 @@ async function runModel(
 
   for (const action of output.actions) {
     if (action.type === 'update_booking_draft') {
-      next = setDraftFields(next ?? newDraft(ctx.now), k.bookingFields, action.fields, services, ctx.now).draft;
+      const updated = setDraftFields(next ?? newDraft(ctx.now), k.bookingFields, action.fields, services, ctx.now).draft;
+      // A fully rejected update must not leave an empty draft behind.
+      if (next || Object.keys(updated.fields).length > 0) next = updated;
     } else if (action.type === 'handoff_to_human') {
       handoff = true;
     } else if (action.type === 'submit_booking_request') {
@@ -140,6 +142,12 @@ async function runModel(
         next = null;
       }
     }
+  }
+
+  // A tool-only turn that completes the draft submits it, exactly as an explicit submit_booking_request would.
+  if (!submitted && !output.text.trim() && next && !sameFields(draft, next) && isComplete(k.bookingFields, next)) {
+    submitted = { ...next.fields };
+    next = null;
   }
 
   // Keep `awaiting` aligned with the draft so a later rules turn stores the answer in the right field.
