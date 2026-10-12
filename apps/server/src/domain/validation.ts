@@ -54,18 +54,65 @@ export const bookingFieldsSchema = z
   .min(1)
   .max(10)
   .refine((fields) => new Set(fields.map((f) => f.key)).size === fields.length, { error: 'Booking field keys must be unique' })
-  .refine((fields) => fields.some((f) => f.required), { error: 'At least one booking field must be required' });
+  .refine((fields) => fields.some((f) => f.required), { error: 'At least one booking field must be required' })
+  .refine((fields) => fields.some((f) => f.required && f.kind === 'contact'), { error: 'Booking forms need a required contact field' });
+
+const ORIGIN_MESSAGE = 'Use an origin like https://example.com (no path, query, credentials or wildcard)';
+
+/** Parses an http(s) origin and returns its canonical form (lowercase host, default port dropped), or null. */
+function normalizeOrigin(value: string): string | null {
+  if (value.includes('*')) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.username || url.password) return null;
+  if (url.pathname !== '/' || url.search || url.hash) return null;
+  return url.origin;
+}
 
 const originSchema = z
   .string()
   .trim()
-  .refine((v) => /^https?:\/\/[^/\s?#]+$/.test(v), { error: 'Use an origin like https://example.com (no path or trailing slash)' });
+  .transform((value, ctx) => {
+    const origin = normalizeOrigin(value);
+    if (origin === null) {
+      ctx.issues.push({ code: 'custom', message: ORIGIN_MESSAGE, input: value });
+      return z.NEVER;
+    }
+    return origin;
+  });
+
+export const timezoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .refine(
+    (value) => {
+      try {
+        new Intl.DateTimeFormat('en', { timeZone: value });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { error: 'Use a valid IANA timezone like Asia/Shanghai' },
+  );
+
+export const nameSchema = z.string().trim().min(1).max(MAX_NAME_CHARS);
 
 export const widgetSchema = z.object({
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, { error: 'Use a hex color like #2563eb' }),
   position: z.enum(['left', 'right']),
   greeting: z.object({ en: text(300), 'zh-CN': text(300) }),
-  allowedOrigins: z.array(originSchema).max(10),
+  allowedOrigins: z
+    .array(originSchema)
+    .max(10)
+    .transform((origins) => [...new Set(origins)]),
 });
 
 export const notifySchema = z.object({
@@ -78,7 +125,7 @@ export const faqInputSchema = z
     question: z.string().trim().min(1).max(KNOWLEDGE_LIMITS.faqQuestionChars),
     answer: z.string().trim().min(1).max(KNOWLEDGE_LIMITS.faqAnswerChars),
     enabled: z.boolean().default(true),
-    sort: z.number().int().min(0).max(1000).default(0),
+    sort: z.number().int().min(0).max(1000).optional(),
   })
   .strict();
 
@@ -94,9 +141,9 @@ export const faqPatchSchema = z
 
 export const businessPatchSchema = z
   .object({
-    name: z.string().trim().min(1).max(MAX_NAME_CHARS),
+    name: nameSchema,
     locale: localeSchema,
-    timezone: z.string().trim().min(1).max(60),
+    timezone: timezoneSchema,
     profile: profileSchema,
     widget: widgetSchema,
     notify: notifySchema,

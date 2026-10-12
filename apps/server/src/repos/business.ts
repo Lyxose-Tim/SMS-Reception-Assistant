@@ -1,5 +1,6 @@
 import { DEFAULT_BOOKING_FIELDS, type BusinessKnowledge, type BusinessProfile, type Faq, type Locale } from '@reception/core';
 import { and, asc, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Db } from '../db/client';
 import { businesses, faqs, type AiSettings, type NotifySettings, type WidgetSettings } from '../db/schema';
 import {
@@ -7,9 +8,13 @@ import {
   businessPatchSchema,
   faqInputSchema,
   faqPatchSchema,
+  localeSchema,
+  nameSchema,
+  notifySchema,
   parseOrThrow,
   profileSchema,
   ValidationError,
+  widgetSchema,
 } from '../domain/validation';
 
 export type BusinessRow = typeof businesses.$inferSelect;
@@ -58,14 +63,28 @@ export function toFaq(row: FaqRow): Faq {
   return { id: row.id, question: row.question, answer: row.answer, enabled: row.enabled };
 }
 
+function isConstraintViolation(error: unknown): boolean {
+  for (let e: unknown = error, depth = 0; e && depth < 5; e = (e as { cause?: unknown }).cause, depth++) {
+    const code = (e as { code?: unknown }).code;
+    if (typeof code === 'string' && code.includes('SQLITE_CONSTRAINT')) return true;
+  }
+  return false;
+}
+
 export async function createBusiness(db: Db, input: CreateBusinessInput): Promise<BusinessRow> {
   if (!/^[a-z0-9-]{3,40}$/.test(input.slug)) {
     throw new ValidationError([{ path: 'slug', message: 'Use 3-40 lowercase letters, digits or hyphens' }]);
   }
+  const { name, locale } = parseOrThrow(z.object({ name: nameSchema, locale: localeSchema }), {
+    name: input.name,
+    locale: input.locale ?? 'en',
+  });
   const profile = parseOrThrow(profileSchema, input.profile ?? emptyProfile());
+  const widget = parseOrThrow(widgetSchema, { ...defaultWidget(), ...input.widget });
+  const notify = parseOrThrow(notifySchema, { ...defaultNotify(), ...input.notify });
   const faqInputs = (input.faqs ?? []).map((f) => parseOrThrow(faqInputSchema, f));
   assertKnowledgeBudget(
-    input.name,
+    name,
     profile,
     faqInputs.map((f, i) => ({ id: String(i), question: f.question, answer: f.answer, enabled: f.enabled })),
   );
@@ -75,24 +94,31 @@ export async function createBusiness(db: Db, input: CreateBusinessInput): Promis
     .values({
       id,
       slug: input.slug,
-      name: input.name.trim(),
-      locale: input.locale ?? 'en',
+      name,
+      locale,
       profile,
       bookingFields: DEFAULT_BOOKING_FIELDS.map((f) => ({ ...f, label: { ...f.label } })),
-      widget: { ...defaultWidget(), ...input.widget },
+      widget,
       ai: defaultAi(),
-      notify: { ...defaultNotify(), ...input.notify },
+      notify,
     })
     .returning();
-  if (faqInputs.length === 0) {
-    const [row] = await businessInsert;
-    return row!;
+  try {
+    if (faqInputs.length === 0) {
+      const [row] = await businessInsert;
+      return row!;
+    }
+    const faqInsert = db
+      .insert(faqs)
+      .values(faqInputs.map((f, i) => ({ businessId: id, question: f.question, answer: f.answer, enabled: f.enabled, sort: i })));
+    const [rows] = await db.batch([businessInsert, faqInsert]);
+    return rows[0]!;
+  } catch (error) {
+    if (isConstraintViolation(error)) {
+      throw new ValidationError([{ path: 'slug', message: 'This slug is already taken' }]);
+    }
+    throw error;
   }
-  const faqInsert = db
-    .insert(faqs)
-    .values(faqInputs.map((f, i) => ({ businessId: id, question: f.question, answer: f.answer, enabled: f.enabled, sort: i })));
-  const [rows] = await db.batch([businessInsert, faqInsert]);
-  return rows[0]!;
 }
 
 export async function getBusinessById(db: Db, id: string): Promise<BusinessRow | null> {
@@ -137,12 +163,14 @@ export async function createFaq(db: Db, businessId: string, input: unknown): Pro
   const parsed = parseOrThrow(faqInputSchema, input);
   const business = await getBusinessById(db, businessId);
   if (!business) throw new ValidationError([{ path: 'businessId', message: 'Unknown business' }]);
-  const existing = (await listFaqs(db, businessId)).map(toFaq);
+  const existingRows = await listFaqs(db, businessId);
+  const existing = existingRows.map(toFaq);
   assertKnowledgeBudget(business.name, business.profile, [
     ...existing,
     { id: 'new', question: parsed.question, answer: parsed.answer, enabled: parsed.enabled },
   ]);
-  const [row] = await db.insert(faqs).values({ businessId, ...parsed }).returning();
+  const sort = parsed.sort ?? existingRows.reduce((max, r) => Math.max(max, r.sort), -1) + 1;
+  const [row] = await db.insert(faqs).values({ businessId, ...parsed, sort }).returning();
   return row!;
 }
 
