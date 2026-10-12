@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { decryptSecret, deriveKey, encryptSecret, hashPassword, randomToken, safeEqualHex, sha256, verifyPassword } from './crypto';
 
@@ -15,6 +16,11 @@ describe('passwords', () => {
     expect(await verifyPassword('x', 'plain')).toBe(false);
     expect(await verifyPassword('x', 'scrypt$only')).toBe(false);
   });
+
+  it('returns false instead of throwing on undecodable salt or key', async () => {
+    await expect(verifyPassword('x', 'scrypt$!!$abc')).resolves.toBe(false);
+    await expect(verifyPassword('x', 'scrypt$$abc')).resolves.toBe(false);
+  });
 });
 
 describe('tokens and hashes', () => {
@@ -29,6 +35,12 @@ describe('tokens and hashes', () => {
     expect(safeEqualHex(sha256('a'), sha256('a'))).toBe(true);
     expect(safeEqualHex(sha256('a'), sha256('b'))).toBe(false);
     expect(safeEqualHex('ab', 'abcd')).toBe(false);
+  });
+
+  it('rejects non-hex, odd-length and empty input', () => {
+    expect(safeEqualHex('ab', 'abzz')).toBe(false);
+    expect(safeEqualHex('abc', 'ab')).toBe(false);
+    expect(safeEqualHex('', '')).toBe(false);
   });
 });
 
@@ -55,5 +67,19 @@ describe('secret encryption', () => {
     parts[3] = Buffer.from('tampered').toString('base64url');
     expect(() => decryptSecret(parts.join('.'), key)).toThrow();
     expect(() => decryptSecret('garbage', key)).toThrow();
+  });
+
+  it('round-trips the empty string', () => {
+    expect(decryptSecret(encryptSecret('', key), key)).toBe('');
+  });
+
+  it('rejects payloads with a truncated tag or a non-12-byte IV', () => {
+    const parts = encryptSecret('secret', key).split('.');
+    const shortTag = [...parts];
+    shortTag[2] = Buffer.from(parts[2]!, 'base64url').subarray(0, 4).toString('base64url');
+    expect(() => decryptSecret(shortTag.join('.'), key)).toThrow('Invalid secret payload');
+    const shortIv = [...parts];
+    shortIv[1] = randomBytes(8).toString('base64url');
+    expect(() => decryptSecret(shortIv.join('.'), key)).toThrow('Invalid secret payload');
   });
 });

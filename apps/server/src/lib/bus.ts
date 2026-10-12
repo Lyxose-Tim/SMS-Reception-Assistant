@@ -37,6 +37,7 @@ export function createEventBus(): EventBus {
       const set = topics.get(topic);
       if (!set) return;
       for (const listener of [...set]) {
+        if (!set.has(listener)) continue; // unsubscribed by an earlier listener during this publish
         try {
           listener(event);
         } catch (error) {

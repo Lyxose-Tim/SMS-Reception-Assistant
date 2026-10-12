@@ -12,7 +12,14 @@ export function createConnectionRegistry(maxPerKey: number): ConnectionRegistry 
       const entry = { close };
       list.push(entry);
       byKey.set(key, list);
-      while (list.length > maxPerKey) list.shift()?.close();
+      while (list.length > maxPerKey) {
+        try {
+          list.shift()?.close();
+        } catch (error) {
+          // A failing close must not abort add() and leave the new entry registered without a release function.
+          console.error('connection close failed', error);
+        }
+      }
       let active = true;
       return () => {
         if (!active) return;

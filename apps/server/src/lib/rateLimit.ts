@@ -8,10 +8,12 @@ const PRUNE_THRESHOLD = 10_000;
 
 export function createRateLimiter(limit: number, windowMs: number): RateLimiter {
   const hits = new Map<string, number[]>();
+  let lastPrune = -Infinity;
   return {
     hit(key, now = Date.now()) {
       const cutoff = now - windowMs;
-      if (hits.size > PRUNE_THRESHOLD) {
+      if (hits.size > PRUNE_THRESHOLD && now - lastPrune >= windowMs) {
+        lastPrune = now;
         for (const [k, times] of hits) if (!times.some((t) => t > cutoff)) hits.delete(k);
       }
       const recent = (hits.get(key) ?? []).filter((t) => t > cutoff);

@@ -40,4 +40,14 @@ describe('createEventBus', () => {
       errorSpy.mockRestore();
     }
   });
+
+  it('skips a listener unsubscribed earlier in the same publish', () => {
+    const bus = createEventBus();
+    const b = vi.fn();
+    let offB: () => void = () => {};
+    bus.subscribe('t', () => offB());
+    offB = bus.subscribe('t', b);
+    bus.publish('t', { type: 'x', data: null });
+    expect(b).not.toHaveBeenCalled();
+  });
 });

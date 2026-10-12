@@ -24,4 +24,21 @@ describe('createConnectionRegistry', () => {
     expect(reg.count('a')).toBe(0);
     expect(reg.count()).toBe(1);
   });
+
+  it('keeps the cap and returns a working release when an evicted close throws', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const reg = createConnectionRegistry(1);
+      reg.add('k', () => {
+        throw new Error('boom');
+      });
+      const release = reg.add('k', () => {});
+      expect(reg.count('k')).toBe(1);
+      expect(errorSpy).toHaveBeenCalledOnce();
+      release();
+      expect(reg.count('k')).toBe(0);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
 });

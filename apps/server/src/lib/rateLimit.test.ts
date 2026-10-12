@@ -22,4 +22,17 @@ describe('createRateLimiter', () => {
     limiter.hit('fresh', 1000);
     expect(limiter.size()).toBe(1);
   });
+
+  it('prunes at most once per window', () => {
+    const limiter = createRateLimiter(1, 1000);
+    for (let i = 0; i < 10_001; i++) limiter.hit(`k${i}`, 0);
+    limiter.hit('a', 1500); // prune runs: all idle keys dropped
+    expect(limiter.size()).toBe(1);
+    for (let i = 0; i < 10_001; i++) limiter.hit(`m${i}`, 1500);
+    limiter.hit('b', 3000); // 1500ms since last prune: prunes again
+    expect(limiter.size()).toBe(1);
+    for (let i = 0; i < 10_001; i++) limiter.hit(`n${i}`, 2500); // idle by 3600
+    limiter.hit('c', 3600); // idle keys exist but only 600ms since the last prune: skipped
+    expect(limiter.size()).toBeGreaterThan(10_000);
+  });
 });
