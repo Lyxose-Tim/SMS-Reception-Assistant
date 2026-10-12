@@ -10,6 +10,11 @@ export type ContactRow = typeof contacts.$inferSelect;
 
 export const VISITOR_VISIBLE_ROLES: readonly MessageRole[] = ['visitor', 'bot', 'agent'];
 
+/** Clamps a LIMIT: non-finite values use the fallback, the result is an integer in [1, max]. */
+export function clampLimit(value: number | undefined, fallback: number, max: number): number {
+  return Math.min(Math.max(1, Math.trunc(Number.isFinite(value) ? value! : fallback)), max);
+}
+
 export interface ConversationListItem {
   conversation: ConversationRow;
   lastMessage: MessageRow | null;
@@ -33,6 +38,7 @@ export async function insertConversation(
   return row!;
 }
 
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
 export async function getConversation(db: Db, id: string): Promise<ConversationRow | null> {
   const [row] = await db.select().from(conversations).where(eq(conversations.id, id)).limit(1);
   return row ?? null;
@@ -63,10 +69,10 @@ export async function listConversations(
   const rows = await db
     .select({ conversation: conversations, contact: contacts })
     .from(conversations)
-    .leftJoin(contacts, eq(contacts.id, conversations.contactId))
+    .leftJoin(contacts, and(eq(contacts.id, conversations.contactId), eq(contacts.businessId, businessId)))
     .where(and(...conditions))
-    .orderBy(desc(conversations.lastMessageAt))
-    .limit(Math.min(opts.limit ?? 50, 200));
+    .orderBy(desc(conversations.lastMessageAt), desc(conversations.id))
+    .limit(clampLimit(opts.limit, 50, 200));
   // At most 200 small lookups; acceptable for a single-business MVP.
   return Promise.all(
     rows.map(async (r) => {
@@ -81,6 +87,7 @@ export async function listConversations(
   );
 }
 
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
 export async function listMessages(
   db: Db,
   conversationId: string,
@@ -94,24 +101,27 @@ export async function listMessages(
     .from(messages)
     .where(and(...conditions))
     .orderBy(asc(messages.id))
-    .limit(Math.min(opts.limit ?? 500, 1000));
+    .limit(clampLimit(opts.limit, 500, 1000));
 }
 
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
 export async function lastMessageId(db: Db, conversationId: string): Promise<number> {
   const [row] = await db.select({ value: max(messages.id) }).from(messages).where(eq(messages.conversationId, conversationId));
   return row?.value ?? 0;
 }
 
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
 export async function recentHistory(db: Db, conversationId: string, limit = 40): Promise<ChatMessage[]> {
   const rows = await db
     .select({ role: messages.role, content: messages.content })
     .from(messages)
-    .where(and(eq(messages.conversationId, conversationId), inArray(messages.role, ['visitor', 'bot', 'agent'])))
+    .where(and(eq(messages.conversationId, conversationId), inArray(messages.role, [...VISITOR_VISIBLE_ROLES])))
     .orderBy(desc(messages.id))
-    .limit(limit);
+    .limit(clampLimit(limit, 40, 200));
   return rows.reverse().map((r) => ({ role: r.role as ChatMessage['role'], content: r.content }));
 }
 
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
 export async function getContact(db: Db, id: string): Promise<ContactRow | null> {
   const [row] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
   return row ?? null;

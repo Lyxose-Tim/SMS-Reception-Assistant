@@ -1,6 +1,7 @@
 import { and, desc, eq, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { bookingRequests } from '../db/schema';
+import { clampLimit } from './conversations';
 
 export type BookingRow = typeof bookingRequests.$inferSelect;
 export type BookingStatus = BookingRow['status'];
@@ -16,8 +17,8 @@ export async function listBookings(
     .select()
     .from(bookingRequests)
     .where(and(...conditions))
-    .orderBy(desc(bookingRequests.createdAt))
-    .limit(Math.min(opts.limit ?? 100, 500));
+    .orderBy(desc(bookingRequests.createdAt), desc(bookingRequests.id))
+    .limit(clampLimit(opts.limit, 100, 500));
 }
 
 export async function getBookingForBusiness(db: Db, businessId: string, id: string): Promise<BookingRow | null> {
@@ -29,12 +30,13 @@ export async function getBookingForBusiness(db: Db, businessId: string, id: stri
   return row ?? null;
 }
 
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
 export async function listBookingsForConversation(db: Db, conversationId: string): Promise<BookingRow[]> {
   return db
     .select()
     .from(bookingRequests)
     .where(eq(bookingRequests.conversationId, conversationId))
-    .orderBy(desc(bookingRequests.createdAt));
+    .orderBy(desc(bookingRequests.createdAt), desc(bookingRequests.id));
 }
 
 /** Only a pending request can be decided; returns null when not found, foreign, or already decided. */

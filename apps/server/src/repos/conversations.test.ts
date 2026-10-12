@@ -76,6 +76,19 @@ describe('conversations', () => {
     expect(history.map((h) => h.content)).toEqual(['m7', 'm8', 'm9']);
   });
 
+  it('clamps message limits: negative becomes 1, NaN falls back to the default', async () => {
+    const { conversation } = await newConversation();
+    for (let i = 0; i < 3; i++) await addMessage(conversation.id, 'visitor', `m${i}`);
+    expect(await listMessages(database.db, conversation.id, { limit: -1 })).toHaveLength(1);
+    expect(await listMessages(database.db, conversation.id, { limit: NaN })).toHaveLength(3);
+  });
+
+  it('clamps recentHistory limit to at least 1', async () => {
+    const { conversation } = await newConversation();
+    for (let i = 0; i < 3; i++) await addMessage(conversation.id, 'visitor', `m${i}`);
+    expect(await recentHistory(database.db, conversation.id, 0)).toHaveLength(1);
+  });
+
   it('lists conversations newest first with filters, last message and contact', async () => {
     const a = await newConversation(new Date('2026-10-11T10:00:00Z'));
     const b = await newConversation(new Date('2026-10-11T11:00:00Z'));
