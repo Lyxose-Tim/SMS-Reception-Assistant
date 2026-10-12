@@ -5,6 +5,7 @@ dist/
 coverage/
 
 # runtime data & secrets
+apps/server/data/
 data/*.db
 data/*.db-*
 *.sqlite3

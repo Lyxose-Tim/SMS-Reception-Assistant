@@ -9,7 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p packages/core/tsconfig.json"
+    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p apps/server/tsconfig.json"
   },
   "engines": {
     "node": ">=22"
