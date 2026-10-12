@@ -14,9 +14,9 @@ export const aiSettingsInputSchema = z
   .object({
     provider: z.enum(AI_PROVIDERS).nullable(),
     model: z.string().trim().max(100),
-    baseUrl: z.union([z.null(), z.url()]).default(null),
+    baseUrl: z.union([z.null(), z.string().trim().max(500)]).default(null),
     /** string = set, null = clear, omitted = keep */
-    apiKey: z.union([z.null(), z.string().trim().min(8).max(500)]).optional(),
+    apiKey: z.union([z.null(), z.string().trim().min(16).max(500)]).optional(),
     enabled: z.boolean(),
   })
   .strict();
@@ -34,6 +34,30 @@ export function publicAiSettings(ai: AiSettings): PublicAiSettings {
   return { provider: ai.provider, model: ai.model, baseUrl: ai.baseUrl, keyLast4: ai.keyLast4, hasKey: ai.encryptedKey !== null, enabled: ai.enabled };
 }
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * Returns an error message, or null when the base URL is acceptable.
+ * NOTE: this is a syntactic check only. Before any multi-tenant SaaS deployment, private-network egress
+ * filtering on the DNS-resolved address (loopback, link-local/metadata, RFC1918, rebinding) is REQUIRED,
+ * because a hostname can still resolve to an internal address.
+ */
+function baseUrlProblem(provider: AiProvider | null, baseUrl: string | null): string | null {
+  if (baseUrl === null) return null;
+  if (provider !== 'openai' && provider !== 'openai-compatible') return 'A base URL is only supported for OpenAI and OpenAI-compatible providers';
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return 'Enter a valid URL';
+  }
+  const local = url.protocol === 'http:' && LOCAL_HOSTS.has(url.hostname);
+  if (url.protocol !== 'https:' && !local) return 'The base URL must use https (http is only allowed for localhost)';
+  if (url.username || url.password) return 'The base URL must not contain credentials';
+  if (url.search || url.hash) return 'The base URL must not contain a query string or fragment';
+  return null;
+}
+
 export async function saveAiSettings(db: Db, business: BusinessRow, input: unknown, key: Buffer, now: Date): Promise<AiSettings> {
   const parsed = parseOrThrow(aiSettingsInputSchema, input);
   let encryptedKey = business.ai.encryptedKey;
@@ -46,6 +70,11 @@ export async function saveAiSettings(db: Db, business: BusinessRow, input: unkno
     keyLast4 = parsed.apiKey.slice(-4);
   }
   const issues: ValidationIssue[] = [];
+  const urlProblem = baseUrlProblem(parsed.provider, parsed.baseUrl);
+  if (urlProblem) issues.push({ path: 'baseUrl', message: urlProblem });
+  if (business.ai.encryptedKey && parsed.apiKey === undefined && (parsed.provider !== business.ai.provider || parsed.baseUrl !== business.ai.baseUrl)) {
+    issues.push({ path: 'apiKey', message: 'Re-enter the API key when changing the provider or base URL' });
+  }
   if (parsed.provider === 'openai-compatible' && !parsed.baseUrl) {
     issues.push({ path: 'baseUrl', message: 'A base URL is required for OpenAI-compatible providers' });
   }
@@ -73,7 +102,10 @@ export function resolveReplyModel(business: BusinessRow, key: Buffer, factory: L
   const { ai } = business;
   if (!ai.enabled || !ai.provider || !ai.model) return null;
   const apiKey = decryptApiKey(ai, key);
-  if (!apiKey) return null;
+  if (!apiKey) {
+    if (ai.encryptedKey) console.warn('AI is enabled but the stored API key could not be decrypted (was APP_SECRET changed?); using rules fallback.');
+    return null;
+  }
   try {
     return createAiReplyModel(factory({ provider: ai.provider, model: ai.model, baseUrl: ai.baseUrl }, apiKey));
   } catch {
@@ -100,6 +132,6 @@ export async function testAiConnection(
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: message.split(apiKey).join('***').slice(0, 300) };
+    return { ok: false, error: message.split(apiKey).join('***').split(encodeURIComponent(apiKey)).join('***').slice(0, 300) };
   }
 }
