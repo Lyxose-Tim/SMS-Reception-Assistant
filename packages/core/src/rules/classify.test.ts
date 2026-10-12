@@ -1,0 +1,147 @@
+import { describe, expect, it } from 'vitest';
+import { classify, isExplicitQuestion } from './classify';
+
+describe('classify topics', () => {
+  it.each([
+    ['What are your hours?', ['hours']],
+    ['Are you open on Saturday?', ['hours']],
+    ['你们几点开门？', ['hours']],
+    ['Do you serve Riverside?', ['areas']],
+    ['服务区域有哪些', ['areas']],
+    ['How much is a deep clean?', ['pricing']],
+    ['深度清洁多少钱', ['pricing']],
+    ['What services do you offer?', ['services']],
+    ['你们提供哪些服务', ['services']],
+  ])('%s → %j', (text, topics) => {
+    expect(classify(text).topics).toEqual(topics);
+  });
+});
+
+describe('classify intents', () => {
+  it('detects booking in English and Chinese', () => {
+    expect(classify('I want to book an appointment').wantsBooking).toBe(true);
+    expect(classify('我想预约上门打扫').wantsBooking).toBe(true);
+  });
+
+  it('detects a request for a human', () => {
+    expect(classify('Can I talk to a real person?').wantsHuman).toBe(true);
+    expect(classify('转人工').wantsHuman).toBe(true);
+  });
+
+  it('does not treat "someone" in an ordinary question as a human request', () => {
+    expect(classify('Can someone clean on Sunday?').wantsHuman).toBe(false);
+  });
+
+  it('does not treat "cancellation policy" as a cancel command', () => {
+    expect(classify('What is your cancellation policy?').wantsCancel).toBe(false);
+    expect(classify('cancel').wantsCancel).toBe(true);
+    expect(classify('算了，取消吧').wantsCancel).toBe(true);
+  });
+
+  it('detects greetings and questions', () => {
+    expect(classify('hello').isGreeting).toBe(true);
+    expect(classify('您好').isGreeting).toBe(true);
+    expect(classify('Do you bring supplies').isQuestion).toBe(true);
+    expect(classify('可以带宠物吗').isQuestion).toBe(true);
+    expect(classify('Alex').isQuestion).toBe(false);
+  });
+});
+
+describe('classify precision fixes', () => {
+  it('does not treat 人工费 / cleaning agent / 客服电话 as a human request', () => {
+    const labour = classify('人工费多少');
+    expect(labour.wantsHuman).toBe(false);
+    expect(labour.topics).toContain('pricing');
+    expect(classify('What cleaning agent do you use?').wantsHuman).toBe(false);
+    expect(classify('客服电话是多少').wantsHuman).toBe(false);
+  });
+
+  it('still detects explicit human requests', () => {
+    expect(classify('转人工').wantsHuman).toBe(true);
+    expect(classify('I want to speak to the manager').wantsHuman).toBe(true);
+    expect(classify('Can I get a human agent?').wantsHuman).toBe(true);
+  });
+
+  it('does not treat 上门 alone as a booking request', () => {
+    expect(classify('你们上门收费吗').wantsBooking).toBe(false);
+  });
+
+  it('does not set hours for "how many/long" questions unless open/close is mentioned', () => {
+    expect(classify('How many hours does a deep clean take?').topics).not.toContain('hours');
+    expect(classify('hours?').topics).toEqual(['hours']);
+    expect(classify('How long are you open on Sunday?').topics).toContain('hours');
+  });
+});
+
+
+describe('isExplicitQuestion', () => {
+  it.each([
+    ['What are your hours', true],
+    ['周六可以吗？', true],
+    ['周六几点都可以', false],
+    ['你们带清洁用品吗', true],
+    ['你们带清洁用品吗。', true],
+    ['可以吗 ', true],
+    ['好呢～', true],
+    ['吗我不知道', false],
+    ['Saturday morning', false],
+  ])('%s → %s', (text, expected) => {
+    expect(isExplicitQuestion(text)).toBe(expected);
+  });
+});
+
+describe('classify pleasantries', () => {
+  it.each([
+    'thanks', 'Thanks!', 'thank you', 'thanks a lot', 'thx', 'ok', 'OK.', 'okay', 'great', 'cool', 'got it',
+    'bye', 'goodbye', 'see you', 'no problem', 'perfect', 'thanks 🙏',
+    '谢谢', '多谢', '谢啦', '好的', '好', '嗯', '行', '知道了', '再见', '拜拜', '没事', '没事了', '谢谢！', '好的。',
+  ])('%s is a pleasantry', (text) => {
+    expect(classify(text).isPleasantry).toBe(true);
+  });
+
+  it.each(['thanks, what are your hours?', 'ok book me in', '谢谢你们几点开门', 'Alex', 'hello'])(
+    '%s is not a pleasantry',
+    (text) => {
+      expect(classify(text).isPleasantry).toBe(false);
+    },
+  );
+
+  it('does not treat 工作人员 mentioned in a question as a human request', () => {
+    expect(classify('工作人员有保险吗').wantsHuman).toBe(false);
+    expect(classify('我要找工作人员').wantsHuman).toBe(true);
+    expect(classify('转工作人员').wantsHuman).toBe(true);
+    expect(classify('请联系工作人员').wantsHuman).toBe(true);
+  });
+});
+
+describe('classify combined pleasantries', () => {
+  it.each([
+    'ok thanks', 'thank you so much', 'thanks, bye', 'ok bye', 'great, thanks!', 'ty', 'thank', 'thanks again',
+    'Thanks so much!!', 'ok, thanks a lot ~', '好的谢谢', '好的，谢谢', '谢谢你', '好的谢谢啦', '谢谢您！', '好的，谢谢你啦～', '谢谢，再见',
+  ])('%s is a pleasantry', (text) => {
+    expect(classify(text).isPleasantry).toBe(true);
+  });
+
+  it.each(['', '   ', '!!!', 'so much', 'a lot', '你', '啦', 'ok I want to book', 'thanks, what are your hours?', '好的谢谢你们几点开门'])(
+    '%j is not a pleasantry',
+    (text) => {
+      expect(classify(text).isPleasantry).toBe(false);
+    },
+  );
+});
+
+describe('classify greetings vs pleasantries', () => {
+  it.each(['你好', '您好', '你好！', '你好呀', 'hello', 'hi there'])('%s is a greeting, not a pleasantry', (text) => {
+    const c = classify(text);
+    expect(c.isGreeting).toBe(true);
+    expect(c.isPleasantry).toBe(false);
+  });
+
+  it.each(['谢谢你们', '谢谢您', '谢谢大家', '你好谢谢', '谢谢你', '好的谢谢'])('%s is a pleasantry', (text) => {
+    expect(classify(text).isPleasantry).toBe(true);
+  });
+
+  it.each(['你', '您'])('%s alone is not a pleasantry', (text) => {
+    expect(classify(text).isPleasantry).toBe(false);
+  });
+});

@@ -1657,7 +1657,7 @@ export function respondWithRules(
 }
 
 function answerQuestion(k: BusinessKnowledge, text: string, c: Classification, locale: Locale): string | null {
-  const faq = matchFaq(text, k.faqs);
+  const faq = matchFaq(text, k.faqs, k.profile.services.map((s) => s.name));
   if (faq) return faq.answer;
   const parts = c.topics
     .map((topic) => answerTopic(k.profile, topic, locale))
