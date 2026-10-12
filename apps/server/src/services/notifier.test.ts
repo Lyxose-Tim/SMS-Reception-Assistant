@@ -54,6 +54,34 @@ describe('notifier', () => {
     expect(mailer.sent.map((m) => m.to)).toEqual(['owner@harbor.example']);
   });
 
+  it.each(['a@x.com,b@y.com', 'a@x.com\r\nBcc: v@y.com', 'Name <a@x.com>', 'a@x.com;b@y.com', 'a b@x.com'])(
+    'does not send a receipt to a non-plain address (%j)',
+    async (contact) => {
+      const mailer = createMemoryMailer();
+      const notifier = createNotifier({ db: database.db, mailer, publicOrigin: 'https://chat.example', now: () => now });
+      const booking = await makeBooking({ ...fields, contact });
+      await notifier.bookingCreated({ business, conversation, booking });
+      expect(mailer.sent.map((m) => m.to)).toEqual(['owner@harbor.example']);
+      const [stored] = await database.db.select().from(bookingRequests).where(eq(bookingRequests.id, booking.id));
+      expect(stored!.receiptSentAt).toBeNull();
+    },
+  );
+
+  it('does not retry a failed visitor receipt but audits the failure', async () => {
+    const failing: Mailer = {
+      async send(message) {
+        if (message.to === 'alex@example.com') throw new Error('SMTP down');
+      },
+    };
+    const notifier = createNotifier({ db: database.db, mailer: failing, publicOrigin: 'https://chat.example', now: () => now });
+    const booking = await makeBooking(fields);
+    await notifier.bookingCreated({ business, conversation, booking });
+    const [stored] = await database.db.select().from(bookingRequests).where(eq(bookingRequests.id, booking.id));
+    expect(stored!.receiptSentAt?.getTime()).toBe(now.getTime());
+    const rows = await database.db.select().from(auditLog).where(and(eq(auditLog.action, 'email_failed'), eq(auditLog.target, 'visitor_receipt')));
+    expect(rows).toHaveLength(1);
+  });
+
   it('never throws and records failures in the audit log', async () => {
     const failing: Mailer = {
       async send() {

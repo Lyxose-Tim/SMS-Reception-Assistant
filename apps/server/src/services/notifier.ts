@@ -1,5 +1,6 @@
 import type { HandoffReason, Locale } from '@reception/core';
 import { and, eq, isNull } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Db } from '../db/client';
 import { bookingRequests } from '../db/schema';
 import { contactFromFields, type ContactFields } from '../domain/contact';
@@ -9,6 +10,15 @@ import { writeAudit } from '../repos/audit';
 import type { BookingRow } from '../repos/bookings';
 import type { BusinessRow } from '../repos/business';
 import type { ConversationRow } from '../repos/conversations';
+
+const emailSchema = z.email();
+// eslint-disable-next-line no-control-regex
+const UNSAFE_RECIPIENT_CHARS = /[,;<>"\s\u0000-\u001F\u007F]/;
+
+/** The visitor receipt goes to exactly one plain address: no lists, display names or header injection. */
+function isPlainEmail(address: string): boolean {
+  return emailSchema.safeParse(address).success && !UNSAFE_RECIPIENT_CHARS.test(address);
+}
 
 export interface Notifier {
   bookingCreated(input: { business: BusinessRow; conversation: ConversationRow; booking: BookingRow }): Promise<void>;
@@ -61,29 +71,35 @@ export function createNotifier(deps: NotifierDeps): Notifier {
   return {
     bookingCreated: ({ business, conversation, booking }) =>
       safely(async () => {
-        const tasks: Promise<void>[] = [];
         const adminUrl = adminConversationUrl(deps.publicOrigin, conversation.id);
+        const { email } = contactFromFields(business.bookingFields, booking.fields);
+        let receiptMessage: MailMessage | null = null;
+        if (email && isPlainEmail(email) && business.notify.visitorReceipts && deps.mailer) {
+          // Atomic claim: at most one receipt per booking even if this runs twice.
+          // At-most-once by design: a failed send is audited (email_failed) and not retried.
+          const claimed = await deps.db
+            .update(bookingRequests)
+            .set({ receiptSentAt: deps.now() })
+            .where(and(eq(bookingRequests.id, booking.id), eq(bookingRequests.businessId, business.id), isNull(bookingRequests.receiptSentAt)))
+            .returning({ id: bookingRequests.id });
+          if (claimed.length > 0) {
+            const locale = conversation.locale ?? business.locale;
+            const content = visitorReceiptEmail({ businessName: business.name, fields: fieldLines(business, booking.fields, locale) }, locale);
+            receiptMessage = { to: email, ...content };
+          }
+        }
+        let ownerMessage: MailMessage | null = null;
         if (business.notify.ownerEmail) {
           const content = ownerBookingEmail(
             { businessName: business.name, fields: fieldLines(business, booking.fields, business.locale), adminUrl },
             business.locale,
           );
-          tasks.push(deliver(business, 'owner_booking', { to: business.notify.ownerEmail, ...content }));
+          ownerMessage = { to: business.notify.ownerEmail, ...content };
         }
-        const { email } = contactFromFields(business.bookingFields, booking.fields);
-        if (email && business.notify.visitorReceipts && deps.mailer) {
-          // Atomic claim: at most one receipt per booking even if this runs twice.
-          const claimed = await deps.db
-            .update(bookingRequests)
-            .set({ receiptSentAt: deps.now() })
-            .where(and(eq(bookingRequests.id, booking.id), isNull(bookingRequests.receiptSentAt)))
-            .returning({ id: bookingRequests.id });
-          if (claimed.length > 0) {
-            const locale = conversation.locale ?? business.locale;
-            const content = visitorReceiptEmail({ businessName: business.name, fields: fieldLines(business, booking.fields, locale) }, locale);
-            tasks.push(deliver(business, 'visitor_receipt', { to: email, ...content }));
-          }
-        }
+        // Everything that can throw has run; start the sends only now so none is left detached.
+        const tasks: Promise<void>[] = [];
+        if (ownerMessage) tasks.push(deliver(business, 'owner_booking', ownerMessage));
+        if (receiptMessage) tasks.push(deliver(business, 'visitor_receipt', receiptMessage));
         await Promise.all(tasks);
       }),
 
