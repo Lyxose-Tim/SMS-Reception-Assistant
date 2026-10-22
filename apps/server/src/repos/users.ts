@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, lte } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { sessions, users } from '../db/schema';
 import { ValidationError } from '../domain/validation';
@@ -65,4 +65,8 @@ export async function getSessionAuth(db: Db, token: string, now: Date): Promise<
 
 export async function deleteSession(db: Db, token: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.id, sha256(token)));
+}
+
+export async function deleteExpiredSessions(db: Db, userId: string, now: Date): Promise<void> {
+  await db.delete(sessions).where(and(eq(sessions.userId, userId), lte(sessions.expiresAt, now)));
 }

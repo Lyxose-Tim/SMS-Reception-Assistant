@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+/** Returns the canonical origin (lowercase host, default port dropped) for a bare http(s) origin, else null. */
+function normalizeOrigin(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/') return null;
+  return url.origin;
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().min(1).default('127.0.0.1'),
@@ -9,8 +22,11 @@ const EnvSchema = z.object({
   PUBLIC_ORIGIN: z
     .string()
     .default('http://127.0.0.1:8787')
-    .transform((v) => v.replace(/\/+$/, ''))
-    .refine((v) => /^https?:\/\/[^/\s]+$/.test(v), { error: 'PUBLIC_ORIGIN must be an origin like https://chat.example.com' }),
+    .transform((v, ctx) => {
+      const origin = normalizeOrigin(v);
+      if (!origin) ctx.issues.push({ code: 'custom', message: 'PUBLIC_ORIGIN must be an origin like https://chat.example.com', input: v });
+      return origin ?? v;
+    }),
   TRUST_PROXY: z
     .enum(['true', 'false'])
     .default('false')

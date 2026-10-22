@@ -1,3 +1,4 @@
+import type { HttpBindings } from '@hono/node-server';
 import type { ReplyModel } from '@reception/core';
 import type { Hono } from 'hono';
 import type { LanguageModelFactory } from '../ai/providers';
@@ -54,7 +55,7 @@ export async function createTestHarness(opts: HarnessOptions = {}): Promise<Test
   const app = createApp(deps);
   // getConnInfo reads the node socket from bindings; app.request needs it passed explicitly.
   const request = async (path: string, init: RequestInit = {}, ip = '203.0.113.7') =>
-    app.request(path, init, { incoming: { socket: { remoteAddress: ip } } } as never);
+    app.request(path, init, { incoming: { socket: { remoteAddress: ip } } } as unknown as HttpBindings);
   const adminHeaders = (cookie: string, extra: Record<string, string> = {}) => ({
     cookie,
     origin: env.PUBLIC_ORIGIN,

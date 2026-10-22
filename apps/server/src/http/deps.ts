@@ -15,6 +15,8 @@ import { createNotifier } from '../services/notifier';
 
 export interface Limiters {
   login: RateLimiter;
+  /** Per normalized email, independent of the source IP (blunts distributed guessing). */
+  loginEmail: RateLimiter;
   visitorMessage: RateLimiter;
   ipMessage: RateLimiter;
   newConversation: RateLimiter;
@@ -24,6 +26,7 @@ export interface Limiters {
 export function createLimiters(): Limiters {
   return {
     login: createRateLimiter(5, 5 * 60_000),
+    loginEmail: createRateLimiter(20, 15 * 60_000),
     visitorMessage: createRateLimiter(20, 60_000),
     ipMessage: createRateLimiter(60, 60_000),
     newConversation: createRateLimiter(20, 60 * 60_000),
