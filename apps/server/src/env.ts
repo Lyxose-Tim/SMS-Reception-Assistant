@@ -38,7 +38,9 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
-  const result = EnvSchema.safeParse(source);
+  // A copied .env.example leaves optionals blank (e.g. PORT=, SMTP_URL=): treat empty values as unset.
+  const present = Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined && value !== ''));
+  const result = EnvSchema.safeParse(present);
   if (!result.success) {
     const details = result.error.issues.map((i) => `${i.path.join('.') || 'env'}: ${i.message}`).join('; ');
     throw new Error(`Invalid environment: ${details}`);

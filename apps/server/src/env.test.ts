@@ -40,6 +40,19 @@ describe('loadEnv', () => {
     }
   });
 
+  it('treats blank values as unset so a copied .env.example uses defaults', () => {
+    const env = loadEnv({ APP_SECRET: secret, PORT: '', SMTP_URL: '', MAIL_FROM: '', TRUST_PROXY: '', HOST: '', DATABASE_URL: '', PUBLIC_ORIGIN: '', NODE_ENV: '' });
+    expect(env.PORT).toBe(8787);
+    expect(env.SMTP_URL).toBeUndefined();
+    expect(env.MAIL_FROM).toBeUndefined();
+    expect(env.TRUST_PROXY).toBe(false);
+    expect(env.HOST).toBe('127.0.0.1');
+    expect(env.DATABASE_URL).toBe('file:./data/reception.db');
+    expect(env.PUBLIC_ORIGIN).toBe('http://127.0.0.1:8787');
+    expect(env.NODE_ENV).toBe('development');
+    expect(() => loadEnv({ APP_SECRET: '' })).toThrow(/APP_SECRET/);
+  });
+
   it('rejects a PUBLIC_ORIGIN with a path', () => {
     expect(() => loadEnv({ APP_SECRET: secret, PUBLIC_ORIGIN: 'https://x.example/admin' })).toThrow(/PUBLIC_ORIGIN/);
   });
