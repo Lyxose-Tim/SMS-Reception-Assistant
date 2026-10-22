@@ -30,6 +30,7 @@ import {
   type ConversationRow,
   type MessageRow,
 } from '../repos/conversations';
+import { toBookingDto } from './dto';
 import type { Notifier } from './notifier';
 
 export interface ChatDeps {
@@ -122,7 +123,7 @@ function publishMessages(deps: ChatDeps, conv: ConversationRow, rows: MessageRow
   }
 }
 
-function publishConversation(deps: ChatDeps, conv: ConversationRow, statusChanged: boolean): void {
+export function publishConversation(deps: ChatDeps, conv: ConversationRow, statusChanged: boolean): void {
   if (statusChanged) deps.bus.publish(convTopic(conv.id), { type: 'status', data: { status: conv.status } });
   deps.bus.publish(bizTopic(conv.businessId), { type: 'conversation', data: conversationSummary(conv) });
 }
@@ -144,7 +145,7 @@ export async function startConversation(deps: ChatDeps, business: BusinessRow): 
     locale: null,
     now: deps.now(),
   });
-  publishConversation(deps, conversation, false);
+  // No bus event: an empty conversation stays out of the inbox until the first message turn publishes it.
   return { conversation, visitorToken };
 }
 
@@ -285,7 +286,7 @@ export async function handleVisitorText(
     if (bookingId) {
       const booking = await getBookingForBusiness(deps.db, business.id, bookingId);
       if (booking) {
-        deps.bus.publish(bizTopic(business.id), { type: 'booking', data: booking });
+        deps.bus.publish(bizTopic(business.id), { type: 'booking', data: toBookingDto(booking, knowledge.bookingFields) });
         pending.push(deps.notifier.bookingCreated({ business, conversation: updated, booking, ...(context.ip ? { ip: context.ip } : {}) }));
       }
     }

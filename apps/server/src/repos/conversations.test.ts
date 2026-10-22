@@ -10,6 +10,7 @@ import {
   insertConversation,
   lastMessageId,
   listConversations,
+  listLatestMessages,
   listMessages,
   recentHistory,
   verifyVisitorToken,
@@ -94,6 +95,7 @@ describe('conversations', () => {
     const b = await newConversation(new Date('2026-10-11T11:00:00Z'));
     await addMessage(a.conversation.id, 'visitor', 'first');
     await addMessage(a.conversation.id, 'bot', 'latest a');
+    await addMessage(b.conversation.id, 'visitor', 'only b');
     const [contact] = await database.db.insert(contacts).values({ businessId: business.id, name: 'Alex', email: 'a@example.com' }).returning();
     await database.db.update(conversations).set({ needsAttention: true, contactId: contact!.id }).where(eq(conversations.id, a.conversation.id));
     await database.db.update(conversations).set({ status: 'closed' }).where(eq(conversations.id, b.conversation.id));
@@ -104,6 +106,44 @@ describe('conversations', () => {
     expect(all[1]!.contact?.name).toBe('Alex');
     expect((await listConversations(database.db, business.id, { filter: 'attention' })).map((i) => i.conversation.id)).toEqual([a.conversation.id]);
     expect((await listConversations(database.db, business.id, { filter: 'open' })).map((i) => i.conversation.id)).toEqual([a.conversation.id]);
+  });
+});
+
+describe('inbox listing', () => {
+  it('excludes conversations with neither messages nor a contact', async () => {
+    const empty = await newConversation(new Date('2026-10-11T12:00:00Z'));
+    const withMessage = await newConversation(new Date('2026-10-11T11:00:00Z'));
+    const withContact = await newConversation(new Date('2026-10-11T10:00:00Z'));
+    await addMessage(withMessage.conversation.id, 'visitor', 'hi');
+    const [contact] = await database.db.insert(contacts).values({ businessId: business.id, email: 'a@example.com' }).returning();
+    await database.db.update(conversations).set({ contactId: contact!.id }).where(eq(conversations.id, withContact.conversation.id));
+    const ids = (await listConversations(database.db, business.id)).map((i) => i.conversation.id);
+    expect(ids).toEqual([withMessage.conversation.id, withContact.conversation.id]);
+    expect(ids).not.toContain(empty.conversation.id);
+  });
+
+  it('pages with a (lastMessageAt, id) cursor', async () => {
+    for (let i = 0; i < 4; i++) {
+      const c = await newConversation(new Date(i < 2 ? '2026-10-11T10:00:00Z' : '2026-10-11T11:00:00Z'));
+      await database.db.update(conversations).set({ lastMessageAt: c.conversation.lastMessageAt }).where(eq(conversations.id, c.conversation.id));
+      await addMessage(c.conversation.id, 'visitor', `m${i}`);
+    }
+    const all = (await listConversations(database.db, business.id)).map((i) => i.conversation);
+    expect(all).toHaveLength(4);
+    const first = await listConversations(database.db, business.id, { limit: 3 });
+    const cursor = first[2]!.conversation;
+    const rest = await listConversations(database.db, business.id, { before: { at: cursor.lastMessageAt.getTime(), id: cursor.id } });
+    expect([...first, ...rest].map((i) => i.conversation.id)).toEqual(all.map((c) => c.id));
+    expect(rest).toHaveLength(1);
+  });
+
+  it('lists the latest messages before an id in ascending order', async () => {
+    const { conversation } = await newConversation();
+    for (let i = 0; i < 6; i++) await addMessage(conversation.id, 'visitor', `m${i}`);
+    const latest = await listLatestMessages(database.db, conversation.id, { limit: 3 });
+    expect(latest.map((m) => m.content)).toEqual(['m3', 'm4', 'm5']);
+    const older = await listLatestMessages(database.db, conversation.id, { limit: 3, beforeId: latest[0]!.id });
+    expect(older.map((m) => m.content)).toEqual(['m0', 'm1', 'm2']);
   });
 });
 

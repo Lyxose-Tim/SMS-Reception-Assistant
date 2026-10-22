@@ -1,4 +1,13 @@
-import { KNOWLEDGE_LIMITS, MAX_NAME_CHARS, validateKnowledge, type BusinessProfile, type Faq } from '@reception/core';
+import {
+  FAQ_ENTRY_OVERHEAD,
+  HEADER_RESERVE,
+  KNOWLEDGE_LIMITS,
+  MAX_NAME_CHARS,
+  profileText,
+  validateKnowledge,
+  type BusinessProfile,
+  type Faq,
+} from '@reception/core';
 import { z } from 'zod';
 
 export interface ValidationIssue {
@@ -162,4 +171,12 @@ export function assertKnowledgeBudget(name: string, profile: BusinessProfile, fa
       message: i.code === 'too_many' ? `At most ${i.limit} enabled FAQs are allowed` : `Too long: ${i.actual} of ${i.limit} characters`,
     })),
   );
+}
+
+/** Budget consumption as the dashboard shows it: the same accounting as validateKnowledge (enabled FAQs only). */
+export function knowledgeUsage(_name: string, profile: BusinessProfile, faqs: Faq[]): { knowledgeChars: number; enabledFaqs: number } {
+  const enabled = faqs.filter((f) => f.enabled);
+  const knowledgeChars =
+    HEADER_RESERVE + profileText(profile).length + enabled.reduce((n, f) => n + f.question.length + f.answer.length + FAQ_ENTRY_OVERHEAD, 0);
+  return { knowledgeChars, enabledFaqs: enabled.length };
 }

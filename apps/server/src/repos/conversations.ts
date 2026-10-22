@@ -1,5 +1,5 @@
 import type { ChatMessage, Locale } from '@reception/core';
-import { and, asc, desc, eq, gt, inArray, max, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNotNull, lt, max, or, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { contacts, conversations, messages, type MessageRole } from '../db/schema';
 import { safeEqualHex, sha256 } from '../lib/crypto';
@@ -13,6 +13,12 @@ export const VISITOR_VISIBLE_ROLES: readonly MessageRole[] = ['visitor', 'bot', 
 /** Clamps a LIMIT: non-finite values use the fallback, the result is an integer in [1, max]. */
 export function clampLimit(value: number | undefined, fallback: number, max: number): number {
   return Math.min(Math.max(1, Math.trunc(Number.isFinite(value) ? value! : fallback)), max);
+}
+
+/** Keyset cursor: the sort timestamp (epoch ms) and id of the last row of the previous page. */
+export interface PageCursor {
+  at: number;
+  id: string;
 }
 
 export interface ConversationListItem {
@@ -61,9 +67,17 @@ export function verifyVisitorToken(conversation: ConversationRow, token: string)
 export async function listConversations(
   db: Db,
   businessId: string,
-  opts: { filter?: 'all' | 'attention' | 'open'; limit?: number } = {},
+  opts: { filter?: 'all' | 'attention' | 'open'; limit?: number; before?: PageCursor } = {},
 ): Promise<ConversationListItem[]> {
-  const conditions: SQL[] = [eq(conversations.businessId, businessId)];
+  const conditions: SQL[] = [
+    eq(conversations.businessId, businessId),
+    // Started-but-unused conversations stay out of the inbox until the visitor writes or leaves a contact.
+    or(sql`exists (select 1 from ${messages} where ${messages.conversationId} = ${conversations.id})`, isNotNull(conversations.contactId))!,
+  ];
+  if (opts.before) {
+    const at = new Date(opts.before.at);
+    conditions.push(or(lt(conversations.lastMessageAt, at), and(eq(conversations.lastMessageAt, at), lt(conversations.id, opts.before.id)))!);
+  }
   if (opts.filter === 'attention') conditions.push(eq(conversations.needsAttention, true));
   if (opts.filter === 'open') conditions.push(inArray(conversations.status, ['bot', 'human']));
   const rows = await db
@@ -102,6 +116,19 @@ export async function listMessages(
     .where(and(...conditions))
     .orderBy(asc(messages.id))
     .limit(clampLimit(opts.limit, 500, 1000));
+}
+
+/** The newest messages (optionally only those before an id), returned oldest first. UNSCOPED: needs a business-scoped parent lookup. */
+export async function listLatestMessages(db: Db, conversationId: string, opts: { limit?: number; beforeId?: number } = {}): Promise<MessageRow[]> {
+  const conditions: SQL[] = [eq(messages.conversationId, conversationId)];
+  if (opts.beforeId !== undefined) conditions.push(lt(messages.id, opts.beforeId));
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(and(...conditions))
+    .orderBy(desc(messages.id))
+    .limit(clampLimit(opts.limit, 200, 1000));
+  return rows.reverse();
 }
 
 /** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */

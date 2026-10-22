@@ -53,6 +53,8 @@ export interface AppDeps extends ChatDeps {
   sse: ConnectionRegistry;
   heartbeatMs: number;
   languageModelFactory: LanguageModelFactory;
+  /** True when a mailer is configured (owner notifications and visitor receipts can actually be sent). */
+  emailEnabled: boolean;
 }
 
 export interface CreateAppDepsInput {
@@ -123,6 +125,7 @@ export function createAppDeps(input: CreateAppDepsInput): AppDeps {
     mutex: createKeyedMutex(),
     now,
     secretKey,
+    emailEnabled: input.mailer !== null,
     languageModelFactory,
     resolveModel,
     limiters,

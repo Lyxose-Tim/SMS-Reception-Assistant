@@ -33,6 +33,8 @@ export interface HarnessOptions {
   languageModelFactory?: LanguageModelFactory;
   heartbeatMs?: number;
   env?: Record<string, string>;
+  /** Pass null to run without a mailer (emailEnabled false). */
+  mailer?: null;
 }
 
 export async function createTestHarness(opts: HarnessOptions = {}): Promise<TestHarness> {
@@ -46,7 +48,7 @@ export async function createTestHarness(opts: HarnessOptions = {}): Promise<Test
   const deps = createAppDeps({
     env,
     db: database.db,
-    mailer,
+    mailer: opts.mailer === null ? null : mailer,
     now: () => clock.now,
     resolveModel: opts.resolveModel ?? (() => null),
     ...(opts.languageModelFactory ? { languageModelFactory: opts.languageModelFactory } : {}),

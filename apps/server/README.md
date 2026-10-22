@@ -16,6 +16,11 @@ Create a real business owner instead of the demo: `npm run cli -w @reception/ser
 - Widget (public, CORS per business `widget.allowedOrigins`): `/api/widget/b/:slug/config`, `POST /api/widget/b/:slug/conversations`, `/api/widget/c/:id/messages` (GET/POST, `Authorization: Bearer <visitorToken>`), `POST /api/widget/c/:id/contact`, `GET /api/widget/c/:id/events` (SSE).
 - Auth: `POST /api/auth/login|logout`, `GET /api/auth/me` (HttpOnly cookie; state-changing calls must send `Origin: PUBLIC_ORIGIN`).
 - Admin: `/api/admin/conversations…`, `/business`, `/faqs`, `/bookings…`, `/ai`, `/events` (SSE).
+  - All admin timestamps (responses and SSE events) are epoch milliseconds; responses are DTOs, never raw rows.
+  - `GET /conversations?filter=all|attention|open&limit=1..100&before=<cursor>` returns `{ conversations, nextCursor }`, sorted by `lastMessageAt` desc, id desc. `nextCursor` (`"<lastMessageAtMs>:<id>"`) is `null` on the last page; pass it back as `before`. A malformed cursor or limit is a 422. Conversations with no messages and no contact are hidden.
+  - `GET /bookings?status&limit=1..100&before=<cursor>` returns `{ bookings, nextCursor }` (same cursor scheme, on `createdAt`).
+  - `GET /conversations/:id` returns the latest 200 messages (ascending) plus `hasMoreMessages`; older ones come from `GET /conversations/:id/messages?before=<messageId>&limit=1..200` as `{ messages, hasMore }` (ascending). Opening a conversation marks it read and emits a `conversation` event.
+  - `GET /business` also returns `emailEnabled` (a mailer is configured) and `usage: { knowledgeChars, enabledFaqs }` (same accounting as `limits.totalChars`).
 
 ## Behaviour notes
 - The AI only answers from the business profile/FAQs; without a key, or when the provider fails or takes > 15 s, the keyword rules answer instead.

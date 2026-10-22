@@ -65,6 +65,14 @@ async function start() {
   return { d, id: conversation.id, visitorToken };
 }
 
+describe('startConversation', () => {
+  it('publishes no business event (the first message turn does)', async () => {
+    const bizEvents = capture(bizTopic(business.id));
+    await start();
+    expect(bizEvents).toEqual([]);
+  });
+});
+
 describe('handleVisitorText', () => {
   it('answers with rules, stores both messages and publishes events', async () => {
     const { d, id } = await start();

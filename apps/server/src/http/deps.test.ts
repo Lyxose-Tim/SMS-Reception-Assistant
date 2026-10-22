@@ -14,6 +14,13 @@ afterEach(() => {
 
 const fakeModel = { reply: async () => ({ text: 'hi', toolCalls: [] }) } as unknown as ReplyModel;
 
+describe('createAppDeps emailEnabled', () => {
+  it('reflects whether a mailer is configured', () => {
+    expect(h.deps.emailEnabled).toBe(true);
+    expect(createAppDeps({ env: h.env, db: h.database.db, mailer: null }).emailEnabled).toBe(false);
+  });
+});
+
 describe('createAppDeps AI daily call budget', () => {
   it('stops handing out the model after the daily limit and resets on the next day', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

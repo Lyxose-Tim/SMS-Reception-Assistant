@@ -1,7 +1,7 @@
-import { and, desc, eq, type SQL } from 'drizzle-orm';
+import { and, desc, eq, lt, or, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { bookingRequests } from '../db/schema';
-import { clampLimit } from './conversations';
+import { clampLimit, type PageCursor } from './conversations';
 
 export type BookingRow = typeof bookingRequests.$inferSelect;
 export type BookingStatus = BookingRow['status'];
@@ -9,10 +9,14 @@ export type BookingStatus = BookingRow['status'];
 export async function listBookings(
   db: Db,
   businessId: string,
-  opts: { status?: BookingStatus; limit?: number } = {},
+  opts: { status?: BookingStatus; limit?: number; before?: PageCursor } = {},
 ): Promise<BookingRow[]> {
   const conditions: SQL[] = [eq(bookingRequests.businessId, businessId)];
   if (opts.status) conditions.push(eq(bookingRequests.status, opts.status));
+  if (opts.before) {
+    const at = new Date(opts.before.at);
+    conditions.push(or(lt(bookingRequests.createdAt, at), and(eq(bookingRequests.createdAt, at), lt(bookingRequests.id, opts.before.id)))!);
+  }
   return db
     .select()
     .from(bookingRequests)
