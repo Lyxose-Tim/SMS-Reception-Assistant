@@ -119,7 +119,7 @@ export function widgetRoutes(deps: AppDeps) {
     return sseStream(c, deps, {
       topic: convTopic(conversation.id),
       connectionKey: `visitor:${conversation.id}`,
-      lastEventId: parseEventId(c.req.header('last-event-id') ?? c.req.query('since')),
+      lastEventId: parseEventId(c.req.header('last-event-id')) ?? parseEventId(c.req.query('since')),
       replay: async (afterId) =>
         (await listMessages(deps.db, conversation.id, { afterId, roles: VISITOR_VISIBLE_ROLES, limit: 200 })).map((m) => ({
           type: 'message',
