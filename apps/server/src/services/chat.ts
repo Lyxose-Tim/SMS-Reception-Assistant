@@ -265,7 +265,7 @@ export async function handleVisitorText(deps: ChatDeps, conversationId: string, 
   });
 }
 
-const offlineContactSchema = z
+export const offlineContactSchema = z
   .object({
     name: z.string().trim().max(100).optional(),
     email: z.email().max(200).optional(),

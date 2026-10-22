@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { parseOrThrow } from '../../domain/validation';
 import { getBusinessById, getBusinessBySlug, listFaqs, type BusinessRow } from '../../repos/business';
 import { getConversation, listMessages, verifyVisitorToken, VISITOR_VISIBLE_ROLES } from '../../repos/conversations';
-import { handleVisitorText, MAX_VISITOR_TEXT, startConversation, submitOfflineContact, toPublicMessage } from '../../services/chat';
+import { handleVisitorText, MAX_VISITOR_TEXT, offlineContactSchema, startConversation, submitOfflineContact, toPublicMessage } from '../../services/chat';
 import type { AppDeps } from '../deps';
 import type { AppEnv } from '../types';
 import { clientIp, parseEventId, readJson } from '../util';
@@ -18,11 +18,11 @@ function originAllowed(deps: AppDeps, business: BusinessRow, origin: string): bo
 /** Per-business CORS: the widget may only be embedded on the merchant's allowed origins. */
 export function corsGuard(deps: AppDeps): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
+    c.header('Vary', 'Origin');
     const origin = c.req.header('origin');
     if (origin) {
       if (!originAllowed(deps, c.get('business'), origin)) return c.json({ error: 'origin_not_allowed' }, 403);
       c.header('Access-Control-Allow-Origin', origin);
-      c.header('Vary', 'Origin');
       c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Last-Event-ID');
       c.header('Access-Control-Max-Age', '600');
@@ -96,7 +96,7 @@ export function widgetRoutes(deps: AppDeps) {
   app.post('/c/:id/messages', async (c) => {
     const body = parseOrThrow(messageSchema, await readJson(c));
     const conversation = c.get('conversation');
-    if (!deps.limiters.visitorMessage.hit(conversation.id) || !deps.limiters.ipMessage.hit(clientIp(c, deps.env.TRUST_PROXY))) {
+    if (!deps.limiters.ipMessage.hit(clientIp(c, deps.env.TRUST_PROXY)) || !deps.limiters.visitorMessage.hit(conversation.id)) {
       return c.json({ error: 'rate_limited' }, 429);
     }
     const turn = await handleVisitorText(deps, conversation.id, body.text, body.locale ?? null);
@@ -106,7 +106,7 @@ export function widgetRoutes(deps: AppDeps) {
 
   app.post('/c/:id/contact', async (c) => {
     const conversation = c.get('conversation');
-    const body = await readJson(c);
+    const body = parseOrThrow(offlineContactSchema, await readJson(c));
     if (!deps.limiters.contact.hit(conversation.id)) return c.json({ error: 'rate_limited' }, 429);
     const result = await submitOfflineContact(deps, conversation.id, body);
     void result.notifications;

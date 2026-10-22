@@ -42,6 +42,15 @@ describe('widget config and CORS', () => {
     expect((await h.request('/api/widget/b/harbor-home/config')).status).toBe(200);
   });
 
+  it('always varies on Origin, including Origin-less responses and 403s', async () => {
+    const noOrigin = await h.request('/api/widget/b/harbor-home/config');
+    expect(noOrigin.headers.get('vary')).toContain('Origin');
+    const denied = await h.request('/api/widget/b/harbor-home/config', { headers: { origin: 'https://evil.example' } });
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get('vary')).toContain('Origin');
+    expect(denied.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
   it('rejects other origins and unknown businesses', async () => {
     expect((await h.request('/api/widget/b/harbor-home/config', { headers: { origin: 'https://evil.example' } })).status).toBe(403);
     expect((await h.request('/api/widget/b/nope/config', { headers: { origin: ORIGIN } })).status).toBe(404);
@@ -115,6 +124,47 @@ describe('widget conversations', () => {
       body: JSON.stringify({ name: 'No contact' }),
     });
     expect(bad.status).toBe(422);
+  });
+
+  it('does not consume the contact limiter on invalid submissions', async () => {
+    const chat = await startChat();
+    const post = (body: unknown) =>
+      h.request(`/api/widget/c/${chat.conversationId}/contact`, {
+        method: 'POST',
+        headers: { origin: ORIGIN, authorization: `Bearer ${chat.visitorToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    for (let i = 0; i < 6; i++) expect((await post({ name: 'x' })).status).toBe(422);
+    expect((await post({ email: 'alex@example.com' })).status).toBe(200);
+  });
+
+  it('does not consume the conversation budget when the IP limit rejects a message', async () => {
+    const chat = await startChat('192.0.2.60');
+    for (let i = 0; i < 60; i++) h.deps.limiters.ipMessage.hit('192.0.2.60');
+    for (let i = 0; i < 5; i++) expect((await send(chat, { text: 'What are your hours?' }, '192.0.2.60')).status).toBe(429);
+    for (let i = 0; i < 20; i++) expect((await send(chat, { text: 'What are your hours?' }, '192.0.2.61')).status).toBe(200);
+  });
+
+  it('hides system messages from the visitor listing after an offline contact', async () => {
+    const chat = await startChat();
+    const headers = { origin: ORIGIN, authorization: `Bearer ${chat.visitorToken}`, 'content-type': 'application/json' };
+    const contact = await h.request(`/api/widget/c/${chat.conversationId}/contact`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email: 'alex@example.com' }),
+    });
+    expect(contact.status).toBe(200);
+    const list = await h.request(`/api/widget/c/${chat.conversationId}/messages?since=0`, { headers });
+    const messages = ((await list.json()) as { messages: { role: string }[] }).messages;
+    expect(messages.map((m) => m.role)).not.toContain('system');
+  });
+
+  it('rejects conversation requests from origins the business does not allow', async () => {
+    const chat = await startChat();
+    const res = await h.request(`/api/widget/c/${chat.conversationId}/messages`, {
+      headers: { origin: 'https://other-shop.example', authorization: `Bearer ${chat.visitorToken}` },
+    });
+    expect(res.status).toBe(403);
   });
 
   it('rejects oversized bodies', async () => {
