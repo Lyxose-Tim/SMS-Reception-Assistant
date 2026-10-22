@@ -19,6 +19,7 @@ import {
 } from '../../services/chat';
 import type { AppDeps } from '../deps';
 import { requireSameOrigin, requireSession } from '../middleware';
+import { sseStream } from '../sse';
 import type { AppEnv } from '../types';
 import { readJson } from '../util';
 
@@ -161,6 +162,16 @@ export function adminRoutes(deps: AppDeps) {
     if (c.get('auth').user.role !== 'owner') return forbidden(c);
     return c.json(await testAiConnection(await currentBusiness(c), deps.secretKey, deps.languageModelFactory));
   });
+
+  // Live events for the dashboard; no replay (the client refetches lists on reconnect).
+  app.get('/events', (c) =>
+    sseStream(c, deps, {
+      topic: bizTopic(businessId(c)),
+      connectionKey: `session:${c.get('auth').sessionId}`,
+      lastEventId: null,
+      replay: async () => [],
+    }),
+  );
 
   return app;
 }

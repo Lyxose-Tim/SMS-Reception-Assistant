@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { parseOrThrow } from '../../domain/validation';
 import { getBusinessById, getBusinessBySlug, listFaqs, type BusinessRow } from '../../repos/business';
 import { getConversation, listMessages, verifyVisitorToken, VISITOR_VISIBLE_ROLES } from '../../repos/conversations';
-import { handleVisitorText, MAX_VISITOR_TEXT, offlineContactSchema, startConversation, submitOfflineContact, toPublicMessage } from '../../services/chat';
+import { convTopic, handleVisitorText, MAX_VISITOR_TEXT, offlineContactSchema, startConversation, submitOfflineContact, toPublicMessage } from '../../services/chat';
 import type { AppDeps } from '../deps';
+import { sseStream } from '../sse';
 import type { AppEnv } from '../types';
 import { clientIp, parseEventId, readJson } from '../util';
 
@@ -111,6 +112,21 @@ export function widgetRoutes(deps: AppDeps) {
     const result = await submitOfflineContact(deps, conversation.id, body);
     void result.notifications;
     return c.json({ ok: true });
+  });
+
+  app.get('/c/:id/events', (c) => {
+    const conversation = c.get('conversation');
+    return sseStream(c, deps, {
+      topic: convTopic(conversation.id),
+      connectionKey: `visitor:${conversation.id}`,
+      lastEventId: parseEventId(c.req.header('last-event-id') ?? c.req.query('since')),
+      replay: async (afterId) =>
+        (await listMessages(deps.db, conversation.id, { afterId, roles: VISITOR_VISIBLE_ROLES, limit: 200 })).map((m) => ({
+          type: 'message',
+          id: String(m.id),
+          data: toPublicMessage(m),
+        })),
+    });
   });
 
   return app;
