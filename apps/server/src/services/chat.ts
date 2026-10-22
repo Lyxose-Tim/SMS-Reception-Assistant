@@ -11,7 +11,7 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import { z } from 'zod';
 import type { Db } from '../db/client';
 import { bookingRequests, contacts, conversations, messages, type MessageRole } from '../db/schema';
-import { contactFromFields } from '../domain/contact';
+import { contactFromFields, type ContactFields } from '../domain/contact';
 import { parseOrThrow, ValidationError } from '../domain/validation';
 import type { EventBus } from '../lib/bus';
 import { randomToken, sha256 } from '../lib/crypto';
@@ -105,6 +105,10 @@ export function conversationSummary(c: ConversationRow): ConversationSummary {
   };
 }
 
+function nonNullFields(contact: ContactFields): Partial<ContactFields> {
+  return Object.fromEntries(Object.entries(contact).filter(([, v]) => v !== null)) as Partial<ContactFields>;
+}
+
 function publishMessages(deps: ChatDeps, conv: ConversationRow, rows: MessageRow[]): void {
   for (const m of rows) {
     if (m.role !== 'system') deps.bus.publish(convTopic(conv.id), { type: 'message', id: String(m.id), data: toPublicMessage(m) });
@@ -181,7 +185,8 @@ export async function handleVisitorText(deps: ChatDeps, conversationId: string, 
     if (result.bookingRequest) {
       const contact = contactFromFields(knowledge.bookingFields, result.bookingRequest.fields);
       if (contactId) {
-        statements.push(deps.db.update(contacts).set(contact).where(eq(contacts.id, contactId)));
+        const provided = nonNullFields(contact);
+        if (Object.keys(provided).length > 0) statements.push(deps.db.update(contacts).set(provided).where(eq(contacts.id, contactId)));
       } else {
         contactId = crypto.randomUUID();
         statements.push(deps.db.insert(contacts).values({ id: contactId, businessId: business.id, ...contact, createdAt: now }));
@@ -249,7 +254,7 @@ export async function handleVisitorText(deps: ChatDeps, conversationId: string, 
         pending.push(deps.notifier.bookingCreated({ business, conversation: updated, booking }));
       }
     }
-    if (handoff && !conv.needsAttention) {
+    if (handoff && (!conv.needsAttention || (nextStatus === 'human' && conv.status !== 'human'))) {
       pending.push(deps.notifier.handoff({ business, conversation: updated, reason: handoff.reason, excerpt: text }));
     }
     return {
@@ -285,7 +290,7 @@ export async function submitOfflineContact(deps: ChatDeps, conversationId: strin
     const now = deps.now();
     const previousId = await lastMessageId(deps.db, conv.id);
     const contact = { name: parsed.name || null, email: parsed.email ?? null, phone: parsed.phone || null };
-    const provided = Object.fromEntries(Object.entries(contact).filter(([, v]) => v !== null));
+    const provided = nonNullFields(contact);
     const statements: BatchItem<'sqlite'>[] = [];
     let contactId = conv.contactId;
     if (contactId) {
@@ -307,7 +312,12 @@ export async function submitOfflineContact(deps: ChatDeps, conversationId: strin
     statements.push(
       deps.db
         .update(conversations)
-        .set({ contactId, needsAttention: true, attentionReason: 'offline_contact', lastMessageAt: now })
+        .set({
+          contactId,
+          needsAttention: true,
+          attentionReason: conv.status === 'human' && conv.attentionReason ? conv.attentionReason : 'offline_contact',
+          lastMessageAt: now,
+        })
         .where(eq(conversations.id, conv.id)),
     );
     statements.push(auditInsert(deps.db, { businessId: business.id, actor: 'visitor', action: 'offline_contact', target: conv.id, now }));
@@ -361,7 +371,7 @@ export async function agentReply(
 const STATUS_ACTIONS = {
   takeover: (userId: string) => ({ status: 'human' as const, needsAttention: false, attentionReason: null, assignedUserId: userId }),
   release: () => ({ status: 'bot' as const, needsAttention: false, attentionReason: null, assignedUserId: null }),
-  close: () => ({ status: 'closed' as const, needsAttention: false, attentionReason: null }),
+  close: () => ({ status: 'closed' as const, needsAttention: false, attentionReason: null, assignedUserId: null }),
 };
 
 export type StatusAction = keyof typeof STATUS_ACTIONS;

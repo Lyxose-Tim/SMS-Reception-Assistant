@@ -120,6 +120,28 @@ describe('handleVisitorText', () => {
     expect(calls.filter((c) => c.kind === 'handoff')).toHaveLength(1);
   });
 
+  it('keeps stored contact details when a booking supplies a different contact kind', async () => {
+    const { d, id } = await start();
+    await submitOfflineContact(d, id, { email: 'a@example.com' });
+    for (const text of ['I want to book a deep cleaning', 'Saturday morning', 'Alex', '13800138000']) await handleVisitorText(d, id, text);
+    const conv = (await getConversation(database.db, id))!;
+    expect(await database.db.select().from(bookingRequests).where(eq(bookingRequests.conversationId, id))).toHaveLength(1);
+    const [contact] = await database.db.select().from(contacts).where(eq(contacts.id, conv.contactId!));
+    expect(contact).toMatchObject({ name: 'Alex', email: 'a@example.com', phone: '13800138000' });
+  });
+
+  it('notifies again when a soft handoff escalates to a hard handoff', async () => {
+    const { d, id } = await start();
+    await (await handleVisitorText(d, id, 'Do you clean boats?')).notifications;
+    expect(calls.filter((c) => c.kind === 'handoff')).toHaveLength(1);
+    const turn = await handleVisitorText(d, id, 'I want to talk to a real person');
+    await turn.notifications;
+    expect(turn.status).toBe('human');
+    const handoffs = calls.filter((c) => c.kind === 'handoff');
+    expect(handoffs).toHaveLength(2);
+    expect(handoffs[1]!.input).toMatchObject({ reason: 'visitor_request' });
+  });
+
   it('hard handoff silences the bot until released', async () => {
     const { d, id } = await start();
     const statusEvents = capture(convTopic(id));
@@ -195,6 +217,22 @@ describe('offline contact', () => {
     expect(calls.map((c) => c.kind)).toEqual(['offline']);
   });
 
+  it('does not overwrite an existing hard attention reason', async () => {
+    const { d, id } = await start();
+    await handleVisitorText(d, id, 'I want to talk to a real person');
+    await submitOfflineContact(d, id, { email: 'a@example.com' });
+    expect((await getConversation(database.db, id))!).toMatchObject({ status: 'human', needsAttention: true, attentionReason: 'visitor_request' });
+  });
+
+  it('publishes the system message to the business topic only', async () => {
+    const { d, id } = await start();
+    const convEvents = capture(convTopic(id));
+    const bizEvents = capture(bizTopic(business.id));
+    await submitOfflineContact(d, id, { email: 'a@example.com' });
+    expect(convEvents.filter((e) => e.type === 'message')).toEqual([]);
+    expect(bizEvents.filter((e) => e.type === 'message')).toHaveLength(1);
+  });
+
   it('requires an email or a valid phone number', async () => {
     const { d, id } = await start();
     await expect(submitOfflineContact(d, id, { name: 'Alex' })).rejects.toBeInstanceOf(ValidationError);
@@ -229,6 +267,30 @@ describe('agent actions', () => {
     const turn = await handleVisitorText(d, id, 'What are your hours?');
     expect(turn.status).toBe('bot');
     expect(turn.messages).toHaveLength(2);
+  });
+
+  it('publishes a status event when a closed conversation reopens', async () => {
+    const { d, id } = await start();
+    await setConversationStatus(d, { businessId: business.id, conversationId: id, action: 'close', userId: 'u' });
+    const events = capture(convTopic(id));
+    await handleVisitorText(d, id, 'What are your hours?');
+    expect(events.filter((e) => e.type === 'status').map((e) => e.data)).toEqual([{ status: 'bot' }]);
+  });
+
+  it('close clears the assignee', async () => {
+    const { d, id } = await start();
+    const taken = await setConversationStatus(d, { businessId: business.id, conversationId: id, action: 'takeover', userId: 'u1' });
+    expect(taken?.assignedUserId).toBe('u1');
+    const closed = await setConversationStatus(d, { businessId: business.id, conversationId: id, action: 'close', userId: 'u1' });
+    expect(closed).toMatchObject({ status: 'closed', assignedUserId: null });
+  });
+
+  it('marks a conversation read for the owning business', async () => {
+    const { d, id } = await start();
+    await handleVisitorText(d, id, 'What are your hours?');
+    expect((await getConversation(database.db, id))!.unreadCount).toBe(1);
+    expect(await markConversationRead(d, business.id, id)).toBe(true);
+    expect((await getConversation(database.db, id))!.unreadCount).toBe(0);
   });
 
   it('validates agent text length', async () => {
