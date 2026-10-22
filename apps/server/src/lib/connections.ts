@@ -2,6 +2,8 @@ export interface ConnectionRegistry {
   /** Registers a connection; closes the oldest ones beyond the cap. Returns an idempotent release function. */
   add(key: string, close: () => void): () => void;
   count(key?: string): number;
+  /** Closes every connection registered under the key. Entries leave via their release functions as streams end. */
+  closeKey(key: string): void;
 }
 
 export function createConnectionRegistry(maxPerKey: number): ConnectionRegistry {
@@ -30,6 +32,15 @@ export function createConnectionRegistry(maxPerKey: number): ConnectionRegistry 
         if (index >= 0) current.splice(index, 1);
         if (current.length === 0) byKey.delete(key);
       };
+    },
+    closeKey(key) {
+      for (const entry of [...(byKey.get(key) ?? [])]) {
+        try {
+          entry.close();
+        } catch (error) {
+          console.error('connection close failed', error);
+        }
+      }
     },
     count(key) {
       if (key !== undefined) return byKey.get(key)?.length ?? 0;

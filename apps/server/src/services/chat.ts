@@ -4,9 +4,10 @@ import {
   type ConversationStatus,
   type EngineResult,
   type HandoffReason,
+  type Locale,
   type ReplyModel,
 } from '@reception/core';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, count, eq, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { z } from 'zod';
 import type { Db } from '../db/client';
@@ -42,6 +43,11 @@ export interface ChatDeps {
 }
 
 export const MAX_VISITOR_TEXT = 1000;
+export const MAX_BOOKINGS_PER_CONVERSATION = 3;
+const BOOKING_LIMIT_REPLY: Record<Locale, string> = {
+  en: "We've already received several booking requests from this chat. A team member will follow up with you.",
+  'zh-CN': '我们已收到此对话中的多个预约申请，工作人员会与您跟进。',
+};
 export const MAX_AGENT_TEXT = 2000;
 export const HARD_HANDOFFS: ReadonlySet<HandoffReason> = new Set<HandoffReason>(['visitor_request', 'message_limit']);
 
@@ -142,7 +148,18 @@ export async function startConversation(deps: ChatDeps, business: BusinessRow): 
   return { conversation, visitorToken };
 }
 
-export async function handleVisitorText(deps: ChatDeps, conversationId: string, rawText: string, localeHint?: string | null): Promise<VisitorTurn> {
+export interface VisitorContext {
+  /** Client address, forwarded to the notifier for receipt throttling. */
+  ip?: string;
+}
+
+export async function handleVisitorText(
+  deps: ChatDeps,
+  conversationId: string,
+  rawText: string,
+  localeHint?: string | null,
+  context: VisitorContext = {},
+): Promise<VisitorTurn> {
   const text = rawText.trim();
   if (!text) throw new ValidationError([{ path: 'text', message: 'Message is empty' }]);
   if (text.length > MAX_VISITOR_TEXT) {
@@ -174,16 +191,31 @@ export async function handleVisitorText(deps: ChatDeps, conversationId: string, 
       { model: deps.resolveModel(business), ...(deps.modelTimeoutMs ? { timeoutMs: deps.modelTimeoutMs } : {}) },
     );
 
+    // Abuse cap: one conversation cannot spawn unlimited booking rows and owner emails.
+    let bookingRequest = result.bookingRequest;
+    let replies = result.replies;
+    let bookingLimited = false;
+    if (bookingRequest) {
+      const [existing] = await deps.db.select({ n: count() }).from(bookingRequests).where(eq(bookingRequests.conversationId, conv.id));
+      if ((existing?.n ?? 0) >= MAX_BOOKINGS_PER_CONVERSATION) {
+        bookingLimited = true;
+        bookingRequest = undefined;
+        replies = [BOOKING_LIMIT_REPLY[result.locale]];
+      }
+    }
+
     const handoff = result.handoff ?? null;
     const nextStatus: ConversationStatus = handoff && HARD_HANDOFFS.has(handoff.reason) ? 'human' : status;
-    const needsAttention = conv.needsAttention || handoff !== null || nextStatus === 'human';
-    const attentionReason = handoff?.reason ?? (needsAttention ? (conv.attentionReason ?? 'visitor_message') : null);
+    const needsAttention = conv.needsAttention || handoff !== null || nextStatus === 'human' || bookingLimited;
+    const attentionReason = bookingLimited
+      ? 'booking_limit'
+      : (handoff?.reason ?? (needsAttention ? (conv.attentionReason ?? 'visitor_message') : null));
 
     const statements: BatchItem<'sqlite'>[] = [];
     let contactId = conv.contactId;
     let bookingId: string | null = null;
-    if (result.bookingRequest) {
-      const contact = contactFromFields(knowledge.bookingFields, result.bookingRequest.fields);
+    if (bookingRequest) {
+      const contact = contactFromFields(knowledge.bookingFields, bookingRequest.fields);
       if (contactId) {
         const provided = nonNullFields(contact);
         if (Object.keys(provided).length > 0) statements.push(deps.db.update(contacts).set(provided).where(eq(contacts.id, contactId)));
@@ -198,7 +230,7 @@ export async function handleVisitorText(deps: ChatDeps, conversationId: string, 
           businessId: business.id,
           conversationId: conv.id,
           contactId,
-          fields: result.bookingRequest.fields,
+          fields: bookingRequest.fields,
           status: 'pending',
           createdAt: now,
         }),
@@ -206,7 +238,7 @@ export async function handleVisitorText(deps: ChatDeps, conversationId: string, 
       statements.push(auditInsert(deps.db, { businessId: business.id, actor: 'visitor', action: 'booking_requested', target: bookingId, now }));
     }
     statements.push(deps.db.insert(messages).values({ conversationId: conv.id, businessId: business.id, role: 'visitor', content: text, createdAt: now }));
-    result.replies.forEach((reply, index) => {
+    replies.forEach((reply, index) => {
       statements.push(
         deps.db.insert(messages).values({
           conversationId: conv.id,
@@ -234,6 +266,9 @@ export async function handleVisitorText(deps: ChatDeps, conversationId: string, 
         })
         .where(eq(conversations.id, conv.id)),
     );
+    if (bookingLimited) {
+      statements.push(auditInsert(deps.db, { businessId: business.id, actor: 'visitor', action: 'booking_limit', target: conv.id, now }));
+    }
     if (handoff) {
       statements.push(
         auditInsert(deps.db, { businessId: business.id, actor: 'visitor', action: 'handoff', target: conv.id, data: { reason: handoff.reason }, now }),
@@ -251,7 +286,7 @@ export async function handleVisitorText(deps: ChatDeps, conversationId: string, 
       const booking = await getBookingForBusiness(deps.db, business.id, bookingId);
       if (booking) {
         deps.bus.publish(bizTopic(business.id), { type: 'booking', data: booking });
-        pending.push(deps.notifier.bookingCreated({ business, conversation: updated, booking }));
+        pending.push(deps.notifier.bookingCreated({ business, conversation: updated, booking, ...(context.ip ? { ip: context.ip } : {}) }));
       }
     }
     if (handoff && (!conv.needsAttention || (nextStatus === 'human' && conv.status !== 'human'))) {

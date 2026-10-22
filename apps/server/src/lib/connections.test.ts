@@ -25,6 +25,41 @@ describe('createConnectionRegistry', () => {
     expect(reg.count()).toBe(1);
   });
 
+  it('closeKey closes every connection of that key only, and entries leave via their release functions', () => {
+    const reg = createConnectionRegistry(5);
+    const a1 = vi.fn();
+    const a2 = vi.fn();
+    const b1 = vi.fn();
+    const off1 = reg.add('a', a1);
+    const off2 = reg.add('a', a2);
+    reg.add('b', b1);
+    reg.closeKey('a');
+    expect(a1).toHaveBeenCalledOnce();
+    expect(a2).toHaveBeenCalledOnce();
+    expect(b1).not.toHaveBeenCalled();
+    off1();
+    off2();
+    expect(reg.count('a')).toBe(0);
+    reg.closeKey('missing');
+  });
+
+  it('closeKey keeps closing the rest when one close throws', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const reg = createConnectionRegistry(5);
+      const second = vi.fn();
+      reg.add('k', () => {
+        throw new Error('boom');
+      });
+      reg.add('k', second);
+      reg.closeKey('k');
+      expect(second).toHaveBeenCalledOnce();
+      expect(errorSpy).toHaveBeenCalledOnce();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('keeps the cap and returns a working release when an evicted close throws', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {

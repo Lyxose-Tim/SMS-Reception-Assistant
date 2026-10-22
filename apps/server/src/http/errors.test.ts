@@ -26,6 +26,36 @@ describe('handleError', () => {
     expect(JSON.stringify(spy.mock.calls)).not.toContain('secret-bound-param');
   });
 
+  it('logs only the name, SQL text and driver message for ORM query errors, never bound parameters', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const cause = new Error('SQLITE_CONSTRAINT: UNIQUE constraint failed: users.email');
+    const err = Object.assign(new Error('Failed query: insert into users (email) values (?)\nparams: victim@example.com,hunter2'), {
+      name: 'DrizzleQueryError',
+      query: 'insert into users (email) values (?)',
+      params: ['victim@example.com', 'hunter2'],
+      cause,
+    });
+    const res = await appWith(() => {
+      throw err;
+    }).request('/');
+    expect(res.status).toBe(500);
+    const logged = JSON.stringify(spy.mock.calls);
+    expect(logged).toContain('DrizzleQueryError');
+    expect(logged).toContain('insert into users (email) values (?)');
+    expect(logged).toContain('UNIQUE constraint failed');
+    expect(logged).not.toContain('victim@example.com');
+    expect(logged).not.toContain('hunter2');
+  });
+
+  it('also treats any error carrying a query string as an ORM error', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const err = Object.assign(new Error('select ... params: secret-value'), { query: 'select 1' });
+    await appWith(() => {
+      throw err;
+    }).request('/');
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('secret-value');
+  });
+
   it('returns a JSON body for plain HTTPExceptions', async () => {
     const res = await appWith(() => {
       throw new HTTPException(400, { message: 'Invalid JSON body' });

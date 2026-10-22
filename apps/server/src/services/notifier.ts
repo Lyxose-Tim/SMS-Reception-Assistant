@@ -21,7 +21,7 @@ function isPlainEmail(address: string): boolean {
 }
 
 export interface Notifier {
-  bookingCreated(input: { business: BusinessRow; conversation: ConversationRow; booking: BookingRow }): Promise<void>;
+  bookingCreated(input: { business: BusinessRow; conversation: ConversationRow; booking: BookingRow; ip?: string }): Promise<void>;
   handoff(input: { business: BusinessRow; conversation: ConversationRow; reason: HandoffReason; excerpt: string }): Promise<void>;
   offlineContact(input: { business: BusinessRow; conversation: ConversationRow; contact: ContactFields; note: string }): Promise<void>;
 }
@@ -31,6 +31,8 @@ export interface NotifierDeps {
   mailer: Mailer | null;
   publicOrigin: string;
   now: () => Date;
+  /** Throttles visitor receipts (they email an address the visitor chose). Checked before the receipt is claimed. */
+  receiptGuard?: { allow(input: { ip: string | null; conversationId: string }): boolean };
 }
 
 export function adminConversationUrl(publicOrigin: string, conversationId: string): string {
@@ -69,19 +71,33 @@ export function createNotifier(deps: NotifierDeps): Notifier {
   }
 
   return {
-    bookingCreated: ({ business, conversation, booking }) =>
+    bookingCreated: ({ business, conversation, booking, ip }) =>
       safely(async () => {
         const adminUrl = adminConversationUrl(deps.publicOrigin, conversation.id);
         const { email } = contactFromFields(business.bookingFields, booking.fields);
         let receiptMessage: MailMessage | null = null;
         if (email && isPlainEmail(email) && business.notify.visitorReceipts && deps.mailer) {
+          // The guard runs before the claim: a throttled receipt is neither claimed nor sent.
+          const allowed = deps.receiptGuard?.allow({ ip: ip ?? null, conversationId: conversation.id }) ?? true;
+          if (!allowed) {
+            await writeAudit(deps.db, {
+              businessId: business.id,
+              actor: 'system',
+              action: 'receipt_skipped',
+              target: booking.id,
+              data: { reason: 'rate_limited' },
+              now: deps.now(),
+            });
+          }
           // Atomic claim: at most one receipt per booking even if this runs twice.
           // At-most-once by design: a failed send is audited (email_failed) and not retried.
-          const claimed = await deps.db
-            .update(bookingRequests)
-            .set({ receiptSentAt: deps.now() })
-            .where(and(eq(bookingRequests.id, booking.id), eq(bookingRequests.businessId, business.id), isNull(bookingRequests.receiptSentAt)))
-            .returning({ id: bookingRequests.id });
+          const claimed = allowed
+            ? await deps.db
+                .update(bookingRequests)
+                .set({ receiptSentAt: deps.now() })
+                .where(and(eq(bookingRequests.id, booking.id), eq(bookingRequests.businessId, business.id), isNull(bookingRequests.receiptSentAt)))
+                .returning({ id: bookingRequests.id })
+            : [];
           if (claimed.length > 0) {
             const locale = conversation.locale ?? business.locale;
             const content = visitorReceiptEmail({ businessName: business.name, fields: fieldLines(business, booking.fields, locale) }, locale);

@@ -116,6 +116,17 @@ describe('auth routes', () => {
     expect(res.status).toBe(429);
   });
 
+  it('limits login attempts per source IP across different emails', async () => {
+    for (let i = 0; i < 30; i++) {
+      const res = await h.request('/api/auth/login', json({ email: `user${i}-${crypto.randomUUID()}@harbor.example`, password: 'x' }, h.env.PUBLIC_ORIGIN));
+      expect(res.status).toBe(401);
+    }
+    const res = await h.request('/api/auth/login', json({ email: `user31-${crypto.randomUUID()}@harbor.example`, password: 'x' }, h.env.PUBLIC_ORIGIN));
+    expect(res.status).toBe(429);
+    const other = await h.request('/api/auth/login', json({ email: 'owner@harbor.example', password: h.password }, h.env.PUBLIC_ORIGIN), '198.51.100.77');
+    expect(other.status).toBe(200);
+  });
+
   it('keys the IP limiter on the proxy-appended hop, not a spoofable leftmost X-Forwarded-For entry', async () => {
     const proxied = await createTestHarness({ env: { TRUST_PROXY: 'true' } });
     try {

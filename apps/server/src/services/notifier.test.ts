@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from '../db/client';
 import { auditLog, bookingRequests } from '../db/schema';
 import { sha256 } from '../lib/crypto';
@@ -99,5 +99,31 @@ describe('notifier', () => {
     await expect(
       notifier.offlineContact({ business, conversation, contact: { name: 'A', email: 'a@example.com', phone: null }, note: '' }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('notifier receipt guard', () => {
+  it('skips the receipt without claiming it when the guard denies, and audits receipt_skipped', async () => {
+    const mailer = createMemoryMailer();
+    const allow = vi.fn(() => false);
+    const notifier = createNotifier({ db: database.db, mailer, publicOrigin: 'https://chat.example', now: () => now, receiptGuard: { allow } });
+    const booking = await makeBooking(fields);
+    await notifier.bookingCreated({ business, conversation, booking, ip: '198.51.100.4' });
+    expect(allow).toHaveBeenCalledWith({ ip: '198.51.100.4', conversationId: conversation.id });
+    expect(mailer.sent.map((m) => m.to)).toEqual(['owner@harbor.example']);
+    const [stored] = await database.db.select().from(bookingRequests).where(eq(bookingRequests.id, booking.id));
+    expect(stored!.receiptSentAt).toBeNull();
+    const rows = await database.db.select().from(auditLog).where(eq(auditLog.action, 'receipt_skipped'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ target: booking.id, data: { reason: 'rate_limited' } });
+  });
+
+  it('passes a null ip to the guard when none is known and sends when it allows', async () => {
+    const mailer = createMemoryMailer();
+    const allow = vi.fn(() => true);
+    const notifier = createNotifier({ db: database.db, mailer, publicOrigin: 'https://chat.example', now: () => now, receiptGuard: { allow } });
+    await notifier.bookingCreated({ business, conversation, booking: await makeBooking(fields) });
+    expect(allow).toHaveBeenCalledWith({ ip: null, conversationId: conversation.id });
+    expect(mailer.sent.map((m) => m.to).sort()).toEqual(['alex@example.com', 'owner@harbor.example']);
   });
 });

@@ -15,6 +15,11 @@ export async function readJson(c: Context, opts: { optional?: boolean } = {}): P
   }
 }
 
+let proxyWarned = false;
+export function resetProxyWarningForTests(): void {
+  proxyWarned = false;
+}
+
 /**
  * X-Forwarded-For is only trusted when TRUST_PROXY=true. In that mode the RIGHTMOST non-empty entry is used:
  * it is the hop appended by our own reverse proxy, whereas everything to its left is client-controlled and
@@ -23,6 +28,12 @@ export async function readJson(c: Context, opts: { optional?: boolean } = {}): P
  * that proxy; otherwise a client could connect directly and choose the value itself.
  */
 export function clientIp(c: Context, trustProxy: boolean): string {
+  if (!trustProxy && !proxyWarned && c.req.header('x-forwarded-for')) {
+    proxyWarned = true;
+    console.warn(
+      'X-Forwarded-For received but TRUST_PROXY=false: rate limits use the proxy address. Set TRUST_PROXY=true when running behind a reverse proxy.',
+    );
+  }
   if (trustProxy) {
     const hops = (c.req.header('x-forwarded-for') ?? '')
       .split(',')

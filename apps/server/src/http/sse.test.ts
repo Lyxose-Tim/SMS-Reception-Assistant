@@ -188,6 +188,16 @@ describe('admin SSE', () => {
     stream.abort();
   });
 
+  it('closes the admin stream when the session logs out', async () => {
+    const cookie = await h.login();
+    const stream = await openStream('/api/admin/events', { cookie });
+    await stream.until((t) => t.includes('event: ready'));
+    const out = await fetch(`${server.url}/api/auth/logout`, { method: 'POST', headers: { cookie, origin: h.env.PUBLIC_ORIGIN } });
+    expect(out.status).toBe(200);
+    expect(await stream.ended()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.sse.count()).toBe(0), { timeout: 3000, interval: 50 });
+  });
+
   it('delivers out-of-order live ids (no global high-water dedupe)', async () => {
     const cookie = await h.login();
     const stream = await openStream('/api/admin/events', { cookie });

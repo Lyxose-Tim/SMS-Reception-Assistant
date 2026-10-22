@@ -100,7 +100,9 @@ export function widgetRoutes(deps: AppDeps) {
     if (!deps.limiters.ipMessage.hit(clientIp(c, deps.env.TRUST_PROXY)) || !deps.limiters.visitorMessage.hit(conversation.id)) {
       return c.json({ error: 'rate_limited' }, 429);
     }
-    const turn = await handleVisitorText(deps, conversation.id, body.text, body.locale ?? null);
+    const turn = await handleVisitorText(deps, conversation.id, body.text, body.locale ?? null, {
+      ip: clientIp(c, deps.env.TRUST_PROXY),
+    });
     void turn.notifications; // best-effort, never rejects
     return c.json({ messages: turn.messages, status: turn.status });
   });

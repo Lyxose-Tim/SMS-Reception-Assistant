@@ -22,11 +22,12 @@ Create a real business owner instead of the demo: `npm run cli -w @reception/ser
 - Bookings are always created as `pending`; only the owner confirms or declines.
 - "Talk to a person" or the 100-message limit hands the chat to a human (the bot stops). Unknown questions flag the chat and email the owner, but the bot keeps answering.
 - Emails are sent only when `SMTP_URL` and `MAIL_FROM` are set.
+- AI replies are capped per business per day by `AI_DAILY_CALL_LIMIT` (default 500); beyond it the keyword rules answer until the next UTC day.
 - `APP_SECRET` must stay stable. Changing it makes stored AI keys undecryptable, and chats fall back to the keyword rules until the merchant re-enters the key.
 
 ## Deploying behind a reverse proxy
 - Set `PUBLIC_ORIGIN` to the public https origin (e.g. `https://chat.example.com`). It is the only origin allowed for state-changing admin/auth requests, an always-allowed widget origin, the base for links in notification emails, and (when https) turns on the `Secure` session cookie.
-- Set `TRUST_PROXY=true` only when the app is reachable exclusively through the proxy **and** the proxy appends the client address to `X-Forwarded-For` (nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`). Otherwise clients can spoof their IP and dodge the per-IP rate limits.
+- Behind a reverse proxy you **must** set `TRUST_PROXY=true`; otherwise every visitor shares the proxy's address and therefore one rate-limit bucket (the server logs a warning when it sees `X-Forwarded-For` with `TRUST_PROXY=false`). Only do so when the app is reachable exclusively through the proxy (it must not be reachable directly) **and** the proxy appends the client address to `X-Forwarded-For` (nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`); otherwise clients can spoof their IP and dodge the per-IP rate limits.
 - Disable proxy buffering for the SSE endpoints `/api/widget/c/*/events` and `/api/admin/events` (nginx: `proxy_buffering off;`). The server already sends `X-Accel-Buffering: no`, which nginx honours unless buffering is forced on.
 - Keep the app bound to `127.0.0.1` (the default `HOST`) and let the proxy terminate TLS.
 

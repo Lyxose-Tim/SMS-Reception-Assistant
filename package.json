@@ -14,7 +14,7 @@
     "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p apps/server/tsconfig.json"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.9"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

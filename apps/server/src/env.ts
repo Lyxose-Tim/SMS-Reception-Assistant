@@ -34,6 +34,7 @@ const EnvSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  AI_DAILY_CALL_LIMIT: z.coerce.number().int().min(1).default(500),
   SMTP_URL: z.string().min(1).optional(),
   MAIL_FROM: z.string().min(1).optional(),
 });

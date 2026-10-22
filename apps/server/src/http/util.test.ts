@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
-import { clientIp } from './util';
+import { describe, expect, it, vi } from 'vitest';
+import { clientIp, resetProxyWarningForTests } from './util';
 
 function ipOf(trustProxy: boolean, xff: string | undefined, remote = '10.0.0.1'): Promise<string> {
   const app = new Hono();
@@ -21,6 +21,26 @@ describe('clientIp', () => {
 
   it('ignores X-Forwarded-For when the proxy is not trusted', async () => {
     expect(await ipOf(false, '6.6.6.6, 203.0.113.9')).toBe('10.0.0.1');
+  });
+
+  it('warns once per process when X-Forwarded-For arrives while TRUST_PROXY is off', async () => {
+    resetProxyWarningForTests();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await ipOf(false, undefined);
+      expect(warn).not.toHaveBeenCalled();
+      await ipOf(true, '6.6.6.6');
+      expect(warn).not.toHaveBeenCalled();
+      await ipOf(false, '6.6.6.6');
+      await ipOf(false, '6.6.6.7');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toBe(
+        'X-Forwarded-For received but TRUST_PROXY=false: rate limits use the proxy address. Set TRUST_PROXY=true when running behind a reverse proxy.',
+      );
+    } finally {
+      warn.mockRestore();
+      resetProxyWarningForTests();
+    }
   });
 
   it('falls back to the socket address when the header is missing or empty', async () => {
