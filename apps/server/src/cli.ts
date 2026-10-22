@@ -1,11 +1,12 @@
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { demoKnowledge } from '@reception/core';
+import { z } from 'zod';
 import { openDatabase, type Db } from './db/client';
 import { ValidationError } from './domain/validation';
 import { loadEnv, type Env } from './env';
 import { createBusiness, getBusinessBySlug } from './repos/business';
-import { createUser, findUserByEmail } from './repos/users';
+import { createUser, findUserByEmail, MIN_PASSWORD_LENGTH } from './repos/users';
 
 const USAGE = `Usage:
   npm run cli -w @reception/server -- create-owner --slug <slug> --name <business name> --email <email> --password <password>
@@ -19,6 +20,14 @@ function required(values: Record<string, string | undefined>, keys: string[]): R
   return values as Record<string, string>;
 }
 
+/** Fail before any business is created, so a bad credential never leaves an orphan business behind. */
+function validateCredentials(email: string, password: string): void {
+  const issues = [];
+  if (!z.email().safeParse(email.trim()).success) issues.push({ path: 'email', message: 'must be a valid email address' });
+  if (password.length < MIN_PASSWORD_LENGTH) issues.push({ path: 'password', message: `must be at least ${MIN_PASSWORD_LENGTH} characters` });
+  if (issues.length) throw new ValidationError(issues);
+}
+
 async function createOwner(db: Db, args: string[], out: (line: string) => void): Promise<number> {
   const { values } = parseArgs({
     args,
@@ -26,6 +35,7 @@ async function createOwner(db: Db, args: string[], out: (line: string) => void):
     strict: true,
   });
   const v = required(values, ['slug', 'email', 'password']);
+  validateCredentials(v.email!, v.password!);
   if (await findUserByEmail(db, v.email!)) {
     out(`User ${v.email} already exists.`);
     return 1;
@@ -44,6 +54,7 @@ async function createOwner(db: Db, args: string[], out: (line: string) => void):
 async function seedDemo(db: Db, env: Env, args: string[], out: (line: string) => void): Promise<number> {
   const { values } = parseArgs({ args, options: { email: { type: 'string' }, password: { type: 'string' } }, strict: true });
   const v = required(values, ['email', 'password']);
+  validateCredentials(v.email!, v.password!);
   let business = await getBusinessBySlug(db, DEMO_SLUG);
   if (business) {
     out('Demo business already exists.');

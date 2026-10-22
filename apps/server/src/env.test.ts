@@ -22,6 +22,12 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ APP_SECRET: 'short' })).toThrow(/APP_SECRET/);
   });
 
+  it('rejects the placeholder APP_SECRET from .env.example', () => {
+    const placeholder = 'change-me-to-a-random-string-of-at-least-32-characters';
+    expect(() => loadEnv({ APP_SECRET: placeholder })).toThrow(/APP_SECRET/);
+    expect(() => loadEnv({ APP_SECRET: `${'a'.repeat(20)}CHANGE-ME${'b'.repeat(20)}` })).toThrow(/APP_SECRET.*placeholder/);
+  });
+
   it('parses numbers, booleans and strips a trailing slash from PUBLIC_ORIGIN', () => {
     const env = loadEnv({ APP_SECRET: secret, PORT: '9000', TRUST_PROXY: 'true', PUBLIC_ORIGIN: 'https://chat.example.com/' });
     expect(env.PORT).toBe(9000);

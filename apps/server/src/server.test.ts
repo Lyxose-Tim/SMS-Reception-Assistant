@@ -40,18 +40,33 @@ async function post(url: string, body?: unknown, token?: string) {
 describe('startServer', () => {
   it('continues a booking across a server restart', async () => {
     let server = await startServer(env, { mailer: null, port: 0 });
-    const chat = (await post(`${server.url}/api/widget/b/harbor-home/conversations`)) as { conversationId: string; visitorToken: string };
-    const say = (text: string) => post(`${server.url}/api/widget/c/${chat.conversationId}/messages`, { text }, chat.visitorToken);
-    await say('I want to book a deep cleaning');
-    await say('Saturday morning');
-    await server.close();
+    try {
+      const chat = (await post(`${server.url}/api/widget/b/harbor-home/conversations`)) as { conversationId: string; visitorToken: string };
+      const say = (text: string) => post(`${server.url}/api/widget/c/${chat.conversationId}/messages`, { text }, chat.visitorToken);
+      await say('I want to book a deep cleaning');
+      await say('Saturday morning');
+      await server.close();
 
-    server = await startServer(env, { mailer: null, port: 0 });
-    await say('Alex');
-    const last = (await say('alex@example.com')) as { messages: { content: string }[] };
-    expect(last.messages.at(-1)!.content).toContain('pending confirmation');
-    const [booking] = await server.deps.db.select().from(bookingRequests).where(eq(bookingRequests.conversationId, chat.conversationId));
-    expect(booking?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Saturday morning', name: 'Alex', contact: 'alex@example.com' });
-    await server.close();
+      server = await startServer(env, { mailer: null, port: 0 });
+      await say('Alex');
+      const last = (await say('alex@example.com')) as { messages: { content: string }[] };
+      expect(last.messages.at(-1)!.content).toContain('pending confirmation');
+      const [booking] = await server.deps.db.select().from(bookingRequests).where(eq(bookingRequests.conversationId, chat.conversationId));
+      expect(booking?.fields).toEqual({ service: 'Deep cleaning', preferred_time: 'Saturday morning', name: 'Alex', contact: 'alex@example.com' });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('rejects when the port is taken and leaves the database usable', async () => {
+    const first = await startServer(env, { mailer: null, port: 0 });
+    try {
+      const port = Number(new URL(first.url).port);
+      await expect(startServer(env, { mailer: null, port })).rejects.toThrow(/EADDRINUSE/);
+      const reopened = await openDatabase(env.DATABASE_URL);
+      reopened.close();
+    } finally {
+      await first.close();
+    }
   });
 });

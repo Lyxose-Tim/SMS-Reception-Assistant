@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
-    "cli": "tsx src/cli.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/index.ts",
+    "cli": "tsx --env-file-if-exists=../../.env src/cli.ts",
     "db:generate": "drizzle-kit generate",
-    "eval:prompts": "tsx src/eval/promptEval.ts"
+    "eval:prompts": "tsx --env-file-if-exists=../../.env src/eval/promptEval.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.78",

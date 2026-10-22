@@ -46,6 +46,18 @@ describe('runCli', () => {
     expect(lines.join('\n')).toContain('already exists');
   });
 
+  it('validates email and password before creating a business', async () => {
+    const base = ['create-owner', '--slug', 'orphan-co', '--name', 'Orphan Co'];
+    expect(await runCli([...base, '--email', 'boss@orphan.example', '--password', 'short'], env, out)).toBe(1);
+    expect(await runCli([...base, '--email', 'not-an-email', '--password', 'a long password'], env, out)).toBe(1);
+    const output = lines.join('\n');
+    expect(output).toContain('password');
+    expect(output).toContain('email');
+    const db = await openDatabase(env.DATABASE_URL);
+    expect(await getBusinessBySlug(db.db, 'orphan-co')).toBeNull();
+    db.close();
+  });
+
   it('prints usage for unknown commands and invalid input', async () => {
     expect(await runCli(['nope'], env, out)).toBe(1);
     expect(lines.join('\n')).toContain('Usage');

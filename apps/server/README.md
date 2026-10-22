@@ -4,8 +4,10 @@ Single-process API server for the reception assistant: widget API, admin API, li
 
 ## Run locally
 1. `npm install` (repo root)
-2. Set environment variables (see `/.env.example`). `APP_SECRET` must be ≥ 32 random characters and must stay stable — it encrypts merchants' AI keys. Blank values (e.g. `SMTP_URL=`) are treated as unset.
+2. Copy `.env.example` to `.env` at the repo root (the npm scripts load it automatically) and set `APP_SECRET`. Generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. It must be ≥ 32 random characters and must stay stable — it encrypts merchants' AI keys; the placeholder value is rejected. Blank values (e.g. `SMTP_URL=`) are treated as unset.
+   Without a file, set variables in the shell instead. Windows PowerShell: `$env:APP_SECRET="<generated value>"` (applies to that session only); bash: `export APP_SECRET=...`.
 3. Seed a fictional demo business: `npm run cli -w @reception/server -- seed-demo --email you@example.com --password "a long password"`
+   Warning: a `--password` given on the command line is saved in your shell history. Use a throwaway first password and change it later (a future UI will offer this), or clear the history afterwards.
 4. `npm run dev:server` → http://127.0.0.1:8787/api/health
 
 Create a real business owner instead of the demo: `npm run cli -w @reception/server -- create-owner --slug acme --name "Acme" --email owner@acme.com --password "…"`

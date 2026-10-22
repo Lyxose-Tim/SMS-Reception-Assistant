@@ -18,7 +18,10 @@ const EnvSchema = z.object({
   HOST: z.string().min(1).default('127.0.0.1'),
   PORT: z.coerce.number().int().min(0).max(65535).default(8787),
   DATABASE_URL: z.string().min(1).default('file:./data/reception.db'),
-  APP_SECRET: z.string({ error: 'APP_SECRET is required' }).min(32, { error: 'APP_SECRET must be at least 32 characters' }),
+  APP_SECRET: z.string({ error: 'APP_SECRET is required' }).min(32, { error: 'APP_SECRET must be at least 32 characters' })
+    .refine((v) => !v.toLowerCase().includes('change-me'), {
+      error: 'APP_SECRET is still the .env.example placeholder; generate a real one (see .env.example)',
+    }),
   PUBLIC_ORIGIN: z
     .string()
     .default('http://127.0.0.1:8787')

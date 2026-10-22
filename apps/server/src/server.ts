@@ -15,8 +15,15 @@ export async function startServer(env: Env, options: { mailer?: Mailer | null; p
   const database = await openDatabase(env.DATABASE_URL);
   const mailer =
     options.mailer !== undefined ? options.mailer : env.SMTP_URL && env.MAIL_FROM ? createSmtpMailer(env.SMTP_URL, env.MAIL_FROM) : null;
-  const deps = createAppDeps({ env, db: database.db, mailer });
-  const server = await listen(createApp(deps), env.HOST, options.port ?? env.PORT);
+  let deps: AppDeps;
+  let server: Awaited<ReturnType<typeof listen>>;
+  try {
+    deps = createAppDeps({ env, db: database.db, mailer });
+    server = await listen(createApp(deps), env.HOST, options.port ?? env.PORT);
+  } catch (error) {
+    database.close();
+    throw error;
+  }
   return {
     url: server.url,
     deps,
