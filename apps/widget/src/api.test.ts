@@ -91,3 +91,38 @@ describe('timeoutSignal', () => {
     expect(second.signal.aborted).toBe(false);
   });
 });
+
+describe('getConfig normalization', () => {
+  const configFrom = async (body: unknown) => createApi('https://chat.example.com', 'harbor-home', asFetch(vi.fn().mockResolvedValue(json(body)))).getConfig();
+
+  it('replaces malformed fields with safe defaults', async () => {
+    const config = await configFrom({
+      business: { name: 42 },
+      locale: 'fr',
+      widget: { primaryColor: 'red;} body{display:none', position: 'top', greeting: { en: 7 } },
+      quickQuestions: 'nope',
+    });
+    expect(config).toEqual({
+      business: { name: '', slug: 'harbor-home' },
+      locale: 'en',
+      widget: { primaryColor: '#2563eb', position: 'right', greeting: { en: '', 'zh-CN': '' } },
+      quickQuestions: [],
+    });
+  });
+
+  it('keeps valid values, de-duplicates quick questions and caps them at four', async () => {
+    const config = await configFrom({
+      business: { name: 'Harbor', slug: 'harbor-home' },
+      locale: 'zh-CN',
+      widget: { primaryColor: '#FDE047', position: 'left', greeting: { en: 'Hi', 'zh-CN': '你好' } },
+      quickQuestions: ['a', 'a', 'b', 3, 'c', 'd', 'e'],
+    });
+    expect(config.locale).toBe('zh-CN');
+    expect(config.widget).toEqual({ primaryColor: '#FDE047', position: 'left', greeting: { en: 'Hi', 'zh-CN': '你好' } });
+    expect(config.quickQuestions).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('rejects a config that is not an object', async () => {
+    await expect(configFrom([])).rejects.toMatchObject({ code: 'bad_response' });
+  });
+});

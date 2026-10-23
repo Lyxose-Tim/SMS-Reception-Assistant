@@ -73,6 +73,37 @@ export async function errorFromResponse(res: Response): Promise<ApiError> {
   return new ApiError(res.status, code);
 }
 
+const DEFAULT_COLOR = '#2563eb';
+const MAX_QUICK_QUESTIONS = 4;
+
+type Dict = Record<string, unknown>;
+
+function isDict(value: unknown): value is Dict {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const asDict = (value: unknown): Dict => (isDict(value) ? value : {});
+const asString = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
+
+/** The server is trusted for shape, not for content: clamp every field the UI depends on. */
+export function normalizeConfig(raw: Dict, slug: string): WidgetConfig {
+  const business = asDict(raw.business);
+  const widget = asDict(raw.widget);
+  const greeting = asDict(widget.greeting);
+  const questions = Array.isArray(raw.quickQuestions) ? raw.quickQuestions.filter((q): q is string => typeof q === 'string' && q.trim() !== '') : [];
+  const color = widget.primaryColor;
+  return {
+    business: { name: asString(business.name), slug: asString(business.slug, slug) },
+    locale: raw.locale === 'zh-CN' ? 'zh-CN' : 'en',
+    widget: {
+      primaryColor: typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color) ? color : DEFAULT_COLOR,
+      position: widget.position === 'left' ? 'left' : 'right',
+      greeting: { en: asString(greeting.en), 'zh-CN': asString(greeting['zh-CN']) },
+    },
+    quickQuestions: [...new Set(questions)].slice(0, MAX_QUICK_QUESTIONS),
+  };
+}
+
 export function createApi(apiBase: string, slug: string, fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis)): WidgetApi {
   const base = `${apiBase}/api/widget`;
   const auth = (s: StoredSession) => ({ Authorization: `Bearer ${s.visitorToken}` });
@@ -108,7 +139,7 @@ export function createApi(apiBase: string, slug: string, fetchImpl: typeof fetch
   });
 
   return {
-    getConfig: () => request<WidgetConfig>(`${base}/b/${encodeURIComponent(slug)}/config`),
+    getConfig: async () => normalizeConfig(await request<Dict>(`${base}/b/${encodeURIComponent(slug)}/config`, {}, isDict), slug),
     createConversation: () => request<StoredSession>(`${base}/b/${encodeURIComponent(slug)}/conversations`, { method: 'POST' }, isSession),
     listMessages: (s, since) => request<MessagesResult>(`${conv(s)}/messages?since=${since}`, { headers: auth(s) }),
     sendMessage: (s, text, locale) => request<MessagesResult>(`${conv(s)}/messages`, postJson({ text, locale }, auth(s))),
