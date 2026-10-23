@@ -30,8 +30,15 @@ describe('readEmbedConfig', () => {
   });
 
   it('falls back to a script[data-business] element when currentScript is unavailable', () => {
-    document.body.append(script({ 'data-business': 'harbor-home' }));
-    expect(readEmbedConfig(null, document, location)?.slug).toBe('harbor-home');
+    // No src on purpose: happy-dom tries to load any appended script with a src and logs an error.
+    const el = document.createElement('script');
+    el.setAttribute('data-business', 'harbor-home');
+    document.body.append(el);
+    expect(readEmbedConfig(null, document, location)).toEqual({
+      slug: 'harbor-home',
+      apiBase: location.origin,
+      locale: null,
+    });
   });
 
   it('rejects a missing or invalid slug with a console warning', () => {
