@@ -1,0 +1,155 @@
+import type { ChatMessage, Locale } from '@reception/core';
+import { and, asc, desc, eq, gt, inArray, isNotNull, lt, max, or, sql, type SQL } from 'drizzle-orm';
+import type { Db } from '../db/client';
+import { contacts, conversations, messages, type MessageRole } from '../db/schema';
+import { safeEqualHex, sha256 } from '../lib/crypto';
+
+export type ConversationRow = typeof conversations.$inferSelect;
+export type MessageRow = typeof messages.$inferSelect;
+export type ContactRow = typeof contacts.$inferSelect;
+
+export const VISITOR_VISIBLE_ROLES: readonly MessageRole[] = ['visitor', 'bot', 'agent'];
+
+/** Clamps a LIMIT: non-finite values use the fallback, the result is an integer in [1, max]. */
+export function clampLimit(value: number | undefined, fallback: number, max: number): number {
+  return Math.min(Math.max(1, Math.trunc(Number.isFinite(value) ? value! : fallback)), max);
+}
+
+/** Keyset cursor: the sort timestamp (epoch ms) and id of the last row of the previous page. */
+export interface PageCursor {
+  at: number;
+  id: string;
+}
+
+export interface ConversationListItem {
+  conversation: ConversationRow;
+  lastMessage: MessageRow | null;
+  contact: ContactRow | null;
+}
+
+export async function insertConversation(
+  db: Db,
+  input: { businessId: string; visitorTokenHash: string; locale: Locale | null; now: Date },
+): Promise<ConversationRow> {
+  const [row] = await db
+    .insert(conversations)
+    .values({
+      businessId: input.businessId,
+      visitorTokenHash: input.visitorTokenHash,
+      locale: input.locale,
+      lastMessageAt: input.now,
+      createdAt: input.now,
+    })
+    .returning();
+  return row!;
+}
+
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
+export async function getConversation(db: Db, id: string): Promise<ConversationRow | null> {
+  const [row] = await db.select().from(conversations).where(eq(conversations.id, id)).limit(1);
+  return row ?? null;
+}
+
+export async function getConversationForBusiness(db: Db, businessId: string, id: string): Promise<ConversationRow | null> {
+  const [row] = await db
+    .select()
+    .from(conversations)
+    .where(and(eq(conversations.id, id), eq(conversations.businessId, businessId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export function verifyVisitorToken(conversation: ConversationRow, token: string): boolean {
+  if (!token) return false;
+  return safeEqualHex(conversation.visitorTokenHash, sha256(token));
+}
+
+export async function listConversations(
+  db: Db,
+  businessId: string,
+  opts: { filter?: 'all' | 'attention' | 'open'; limit?: number; before?: PageCursor } = {},
+): Promise<ConversationListItem[]> {
+  const conditions: SQL[] = [
+    eq(conversations.businessId, businessId),
+    // Started-but-unused conversations stay out of the inbox until the visitor writes or leaves a contact.
+    or(sql`exists (select 1 from ${messages} where ${messages.conversationId} = ${conversations.id})`, isNotNull(conversations.contactId))!,
+  ];
+  if (opts.before) {
+    const at = new Date(opts.before.at);
+    conditions.push(or(lt(conversations.lastMessageAt, at), and(eq(conversations.lastMessageAt, at), lt(conversations.id, opts.before.id)))!);
+  }
+  if (opts.filter === 'attention') conditions.push(eq(conversations.needsAttention, true));
+  if (opts.filter === 'open') conditions.push(inArray(conversations.status, ['bot', 'human']));
+  const rows = await db
+    .select({ conversation: conversations, contact: contacts })
+    .from(conversations)
+    .leftJoin(contacts, and(eq(contacts.id, conversations.contactId), eq(contacts.businessId, businessId)))
+    .where(and(...conditions))
+    .orderBy(desc(conversations.lastMessageAt), desc(conversations.id))
+    .limit(clampLimit(opts.limit, 50, 200));
+  // At most 200 small lookups; acceptable for a single-business MVP.
+  return Promise.all(
+    rows.map(async (r) => {
+      const [lastMessage] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.conversationId, r.conversation.id))
+        .orderBy(desc(messages.id))
+        .limit(1);
+      return { conversation: r.conversation, contact: r.contact, lastMessage: lastMessage ?? null };
+    }),
+  );
+}
+
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
+export async function listMessages(
+  db: Db,
+  conversationId: string,
+  opts: { afterId?: number; limit?: number; roles?: readonly MessageRole[] } = {},
+): Promise<MessageRow[]> {
+  const conditions: SQL[] = [eq(messages.conversationId, conversationId)];
+  if (opts.afterId !== undefined) conditions.push(gt(messages.id, opts.afterId));
+  if (opts.roles) conditions.push(inArray(messages.role, [...opts.roles]));
+  return db
+    .select()
+    .from(messages)
+    .where(and(...conditions))
+    .orderBy(asc(messages.id))
+    .limit(clampLimit(opts.limit, 500, 1000));
+}
+
+/** The newest messages (optionally only those before an id), returned oldest first. UNSCOPED: needs a business-scoped parent lookup. */
+export async function listLatestMessages(db: Db, conversationId: string, opts: { limit?: number; beforeId?: number } = {}): Promise<MessageRow[]> {
+  const conditions: SQL[] = [eq(messages.conversationId, conversationId)];
+  if (opts.beforeId !== undefined) conditions.push(lt(messages.id, opts.beforeId));
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(and(...conditions))
+    .orderBy(desc(messages.id))
+    .limit(clampLimit(opts.limit, 200, 1000));
+  return rows.reverse();
+}
+
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
+export async function lastMessageId(db: Db, conversationId: string): Promise<number> {
+  const [row] = await db.select({ value: max(messages.id) }).from(messages).where(eq(messages.conversationId, conversationId));
+  return row?.value ?? 0;
+}
+
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
+export async function recentHistory(db: Db, conversationId: string, limit = 40): Promise<ChatMessage[]> {
+  const rows = await db
+    .select({ role: messages.role, content: messages.content })
+    .from(messages)
+    .where(and(eq(messages.conversationId, conversationId), inArray(messages.role, [...VISITOR_VISIBLE_ROLES])))
+    .orderBy(desc(messages.id))
+    .limit(clampLimit(limit, 40, 200));
+  return rows.reverse().map((r) => ({ role: r.role as ChatMessage['role'], content: r.content }));
+}
+
+/** UNSCOPED: visitor/service use only, or after a business-scoped parent lookup. */
+export async function getContact(db: Db, id: string): Promise<ContactRow | null> {
+  const [row] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
+  return row ?? null;
+}

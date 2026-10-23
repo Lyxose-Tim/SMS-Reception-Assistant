@@ -1,0 +1,31 @@
+{
+  "name": "@reception/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/index.ts",
+    "cli": "tsx --env-file-if-exists=../../.env src/cli.ts",
+    "db:generate": "drizzle-kit generate",
+    "eval:prompts": "tsx --env-file-if-exists=../../.env src/eval/promptEval.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.78",
+    "@ai-sdk/google": "^4.0.93",
+    "@ai-sdk/openai": "^4.0.91",
+    "@ai-sdk/openai-compatible": "^3.0.67",
+    "@hono/node-server": "^2.1.4",
+    "@libsql/client": "^0.18.0",
+    "@reception/core": "*",
+    "ai": "^7.0.137",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "nodemailer": "^10.1.0",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11"
+  }
+}

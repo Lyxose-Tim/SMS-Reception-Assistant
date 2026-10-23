@@ -9,10 +9,12 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p packages/core/tsconfig.json"
+    "dev:server": "npm run dev -w @reception/server",
+    "start:server": "npm run start -w @reception/server",
+    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p apps/server/tsconfig.json"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.9"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
