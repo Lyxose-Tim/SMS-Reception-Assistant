@@ -35,6 +35,8 @@ export interface HarnessOptions {
   env?: Record<string, string>;
   /** Pass null to run without a mailer (emailEnabled false). */
   mailer?: null;
+  /** Path of the widget bundle served at /widget.js. */
+  widgetFile?: string;
 }
 
 export async function createTestHarness(opts: HarnessOptions = {}): Promise<TestHarness> {
@@ -53,6 +55,7 @@ export async function createTestHarness(opts: HarnessOptions = {}): Promise<Test
     resolveModel: opts.resolveModel ?? (() => null),
     ...(opts.languageModelFactory ? { languageModelFactory: opts.languageModelFactory } : {}),
     ...(opts.heartbeatMs ? { heartbeatMs: opts.heartbeatMs } : {}),
+    ...(opts.widgetFile ? { widgetFile: opts.widgetFile } : {}),
   });
   const app = createApp(deps);
   // getConnInfo reads the node socket from bindings; app.request needs it passed explicitly.

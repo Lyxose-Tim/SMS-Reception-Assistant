@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { ReplyModel } from '@reception/core';
 import { createLanguageModel, type LanguageModelFactory } from '../ai/providers';
 import { resolveReplyModel } from '../ai/settings';
@@ -12,6 +13,9 @@ import type { Mailer } from '../mail/mailer';
 import type { BusinessRow } from '../repos/business';
 import type { ChatDeps } from '../services/chat';
 import { createNotifier } from '../services/notifier';
+
+/** apps/widget/dist/widget.js, resolved from this file so it works from any cwd. */
+export const DEFAULT_WIDGET_FILE = fileURLToPath(new URL('../../../widget/dist/widget.js', import.meta.url));
 
 export interface Limiters {
   /** Per source IP only, whatever the email: stops one host rotating emails to dodge the per-email limits. */
@@ -55,6 +59,8 @@ export interface AppDeps extends ChatDeps {
   languageModelFactory: LanguageModelFactory;
   /** True when a mailer is configured (owner notifications and visitor receipts can actually be sent). */
   emailEnabled: boolean;
+  /** Built widget bundle served at /widget.js. */
+  widgetFile: string;
 }
 
 export interface CreateAppDepsInput {
@@ -68,6 +74,8 @@ export interface CreateAppDepsInput {
   modelTimeoutMs?: number;
   /** Overrides env.AI_DAILY_CALL_LIMIT. */
   aiDailyCallLimit?: number;
+  /** Overrides the built widget bundle path (tests). */
+  widgetFile?: string;
 }
 
 /** Caps model-backed replies per business per UTC day; beyond the cap the engine falls back to rules. */
@@ -126,6 +134,7 @@ export function createAppDeps(input: CreateAppDepsInput): AppDeps {
     now,
     secretKey,
     emailEnabled: input.mailer !== null,
+    widgetFile: input.widgetFile ?? DEFAULT_WIDGET_FILE,
     languageModelFactory,
     resolveModel,
     limiters,
