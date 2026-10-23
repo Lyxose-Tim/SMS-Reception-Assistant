@@ -1,0 +1,21 @@
+{
+  "name": "@reception/widget",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node scripts/check-size.mjs",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "preact": "^11.0.1"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/preact": "^3.2.6",
+    "@testing-library/user-event": "^14.6.8",
+    "happy-dom": "^21.0.4",
+    "vite": "^8.3.5"
+  }
+}
