@@ -1,4 +1,4 @@
-import { errorFromResponse } from './api';
+import { ApiError, errorFromResponse } from './api';
 
 export interface SseEvent {
   event: string;
@@ -38,7 +38,12 @@ export interface StreamOptions {
   signal: AbortSignal;
   onEvent(event: SseEvent): void;
   fetchImpl?: typeof fetch;
+  /** Reject with ApiError(0, 'stalled') when no chunk (pings included) arrives for this long. */
+  idleTimeoutMs?: number;
 }
+
+/** The server sends a `: ping` comment every 25 s, so 60 s of silence means a dead connection. */
+export const IDLE_TIMEOUT_MS = 60_000;
 
 /**
  * Reads a server-sent event stream with fetch so the visitor token can travel in the
@@ -47,22 +52,54 @@ export interface StreamOptions {
  */
 export async function streamEvents(options: StreamOptions): Promise<void> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
-  const res = await fetchImpl(options.url, {
-    headers: {
-      Authorization: `Bearer ${options.token}`,
-      Accept: 'text/event-stream',
-      ...(options.lastEventId !== null ? { 'Last-Event-ID': String(options.lastEventId) } : {}),
-    },
-    cache: 'no-store',
-    signal: options.signal,
-  });
-  if (!res.ok || !res.body) throw await errorFromResponse(res);
+  const idleMs = options.idleTimeoutMs ?? IDLE_TIMEOUT_MS;
+  let res: Response;
+  try {
+    res = await fetchImpl(options.url, {
+      headers: {
+        Authorization: `Bearer ${options.token}`,
+        Accept: 'text/event-stream',
+        ...(options.lastEventId !== null ? { 'Last-Event-ID': String(options.lastEventId) } : {}),
+      },
+      cache: 'no-store',
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (options.signal.aborted) throw error;
+    throw new ApiError(0, 'network');
+  }
+  if (!res.ok) throw await errorFromResponse(res);
+  if (!res.body) throw new ApiError(res.status, 'no_body');
+
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   const parse = createSseParser(options.onEvent);
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return;
-    parse(decoder.decode(value, { stream: true }));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stall: (error: ApiError) => void = () => {};
+  const stalled = new Promise<never>((_, reject) => {
+    stall = reject;
+  });
+  stalled.catch(() => {}); // only observed through the race below
+  const arm = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => stall(new ApiError(0, 'stalled')), idleMs);
+  };
+  try {
+    arm();
+    for (;;) {
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await Promise.race([reader.read(), stalled]);
+      } catch (error) {
+        if (error instanceof ApiError || options.signal.aborted) throw error;
+        throw new ApiError(0, 'network');
+      }
+      if (chunk.done) return;
+      arm();
+      parse(decoder.decode(chunk.value, { stream: true }));
+    }
+  } finally {
+    clearTimeout(timer);
+    reader.cancel().catch(() => {}); // no-op after normal completion; releases the connection otherwise
   }
 }

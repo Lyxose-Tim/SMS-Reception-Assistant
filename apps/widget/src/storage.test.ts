@@ -52,4 +52,22 @@ describe('createSessionStore', () => {
     store.save(session);
     expect(store.load()).toEqual(session);
   });
+
+  it('keeps the latest save when setItem fails but an older session is still stored', () => {
+    const old = { conversationId: 'old', visitorToken: 'old-token' };
+    const removeItem = vi.fn();
+    const stuck = {
+      getItem: () => JSON.stringify(old),
+      setItem() {
+        throw new DOMException('quota', 'QuotaExceededError');
+      },
+      removeItem,
+    } as unknown as Storage;
+    const store = createSessionStore('harbor-home', () => stuck);
+    expect(store.load()).toEqual(old);
+    const latest = { conversationId: 'c2', visitorToken: 't2' };
+    store.save(latest);
+    expect(store.load()).toEqual(latest);
+    expect(removeItem).toHaveBeenCalledWith('reception-widget:harbor-home');
+  });
 });

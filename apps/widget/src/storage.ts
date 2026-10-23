@@ -13,7 +13,7 @@ function defaultStorage(): Storage | null {
   return typeof localStorage === 'undefined' ? null : localStorage;
 }
 
-function isSession(value: unknown): value is StoredSession {
+export function isSession(value: unknown): value is StoredSession {
   const v = value as Partial<StoredSession> | null;
   return typeof v?.conversationId === 'string' && typeof v.visitorToken === 'string' && v.conversationId !== '' && v.visitorToken !== '';
 }
@@ -31,6 +31,7 @@ export function createSessionStore(slug: string, getStorage: () => Storage | nul
   };
   return {
     load() {
+      if (memory) return memory; // within one page view the latest save() wins
       try {
         const raw = storage()?.getItem(key);
         if (raw) {
@@ -38,16 +39,21 @@ export function createSessionStore(slug: string, getStorage: () => Storage | nul
           if (isSession(parsed)) return parsed;
         }
       } catch {
-        // fall through to memory
+        // unreadable or corrupt: treat as no session
       }
-      return memory;
+      return null;
     },
     save(session) {
       memory = session;
       try {
         storage()?.setItem(key, JSON.stringify(session));
       } catch {
-        // memory copy is enough for this page view
+        // memory copy is enough for this page view; drop any stale stored session so it cannot reappear later
+        try {
+          storage()?.removeItem(key);
+        } catch {
+          // nothing more to do
+        }
       }
     },
     clear() {

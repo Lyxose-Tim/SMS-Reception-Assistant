@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from './api';
-import { createSseParser, streamEvents, type SseEvent } from './sse';
+import { IDLE_TIMEOUT_MS, createSseParser, streamEvents, type SseEvent } from './sse';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -77,6 +77,101 @@ describe('streamEvents', () => {
         fetchImpl: fetchImpl as unknown as typeof fetch,
       }),
     ).rejects.toMatchObject({ name: 'ApiError', status: 401, code: 'unauthorized' });
-    expect(ApiError).toBeDefined();
+  });
+
+  const baseOptions = (fetchImpl: unknown, extra: Partial<Parameters<typeof streamEvents>[0]> = {}) => ({
+    url: 'u',
+    token: 't',
+    lastEventId: null,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+    fetchImpl: fetchImpl as typeof fetch,
+    ...extra,
+  });
+
+  it('exports a 60 s default idle timeout (server pings every 25 s)', () => {
+    expect(IDLE_TIMEOUT_MS).toBe(60_000);
+  });
+
+  it('rejects with code stalled and cancels the reader when no chunk arrives within idleTimeoutMs', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(body, { status: 200 }));
+    await expect(streamEvents(baseOptions(fetchImpl, { idleTimeoutMs: 30 }))).rejects.toMatchObject({ name: 'ApiError', status: 0, code: 'stalled' });
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it('does not stall while comment-only pings keep arriving', async () => {
+    const encoder = new TextEncoder();
+    let interval: ReturnType<typeof setInterval> | undefined;
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        interval = setInterval(() => {
+          controller.enqueue(encoder.encode(': ping\n\n'));
+          if (++sent === 6) {
+            clearInterval(interval);
+            controller.close();
+          }
+        }, 10);
+      },
+      cancel() {
+        clearInterval(interval);
+      },
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(body, { status: 200 }));
+    await expect(streamEvents(baseOptions(fetchImpl, { idleTimeoutMs: 40 }))).resolves.toBeUndefined();
+    expect(sent).toBe(6);
+  });
+
+  it('cancels the stream and rejects when onEvent throws', async () => {
+    const cancel = vi.fn();
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: x\n\n'));
+      },
+      cancel,
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(body, { status: 200 }));
+    const boom = new Error('boom');
+    await expect(
+      streamEvents(
+        baseOptions(fetchImpl, {
+          onEvent: () => {
+            throw boom;
+          },
+        }),
+      ),
+    ).rejects.toBe(boom);
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it('maps a fetch rejection to ApiError network, but rethrows as-is when the signal was aborted', async () => {
+    const failing = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const error = await streamEvents(baseOptions(failing)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 0, code: 'network' });
+
+    const controller = new AbortController();
+    controller.abort();
+    const abortError = new DOMException('aborted', 'AbortError');
+    const aborted = vi.fn().mockRejectedValue(abortError);
+    await expect(streamEvents(baseOptions(aborted, { signal: controller.signal }))).rejects.toBe(abortError);
+  });
+
+  it('maps a mid-stream read error to ApiError network', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(new TypeError('connection reset'));
+      },
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(body, { status: 200 }));
+    await expect(streamEvents(baseOptions(fetchImpl))).rejects.toMatchObject({ status: 0, code: 'network' });
+  });
+
+  it('rejects with no_body when a 2xx response has no body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(streamEvents(baseOptions(fetchImpl))).rejects.toMatchObject({ status: 204, code: 'no_body' });
   });
 });
