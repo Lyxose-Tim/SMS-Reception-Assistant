@@ -6,6 +6,8 @@ import type { SessionStore, StoredSession } from './storage';
 export const MAX_TEXT = 1000;
 export const PAGE_SIZE = 200;
 export const BACKOFF_MS = [1000, 2000, 5000, 10000] as const;
+/** A stream must stay up this long after `ready` before the reconnect backoff starts over. */
+export const HEALTHY_MS = 10_000;
 
 export interface ChatState {
   phase: 'loading' | 'ready' | 'unavailable';
@@ -27,21 +29,26 @@ export interface ChatStoreDeps {
   localeOverride: string | null;
   browserLanguage: string | undefined;
   sleep?(ms: number, signal: AbortSignal): Promise<void>;
+  now?(): number;
 }
 
 const STATUSES: readonly ConversationStatus[] = ['bot', 'human', 'closed'];
 
-function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
   });
 }
 
@@ -84,7 +91,17 @@ export class ChatStore {
   };
   private readonly listeners = new Set<(state: ChatState) => void>();
   private session: StoredSession | null = null;
+  private creating: Promise<StoredSession> | null = null;
   private streamAbort: AbortController | null = null;
+  /**
+   * Highest message id up to which the store has seen the full history (via the stream or a
+   * catch-up page). Used as the stream's Last-Event-ID and the catch-up cursor. Send responses
+   * never advance it: their ids can be ahead of messages the store has not received yet.
+   */
+  private syncedId = 0;
+  /** Bumped on every live status event so slower request-based status updates can tell they are stale. */
+  private statusVersion = 0;
+  private destroyed = false;
 
   constructor(private readonly deps: ChatStoreDeps) {}
 
@@ -100,32 +117,31 @@ export class ChatStore {
   }
 
   private set(patch: Partial<ChatState>): void {
+    if (this.destroyed) return;
     this.state = { ...this.state, ...patch };
     for (const listener of [...this.listeners]) listener(this.state);
   }
 
   async init(): Promise<void> {
+    let config: WidgetConfig;
     try {
-      const config = await this.deps.api.getConfig();
-      this.set({ phase: 'ready', config, locale: pickLocale(this.deps.localeOverride, this.deps.browserLanguage, config.locale) });
+      config = await this.deps.api.getConfig();
     } catch {
       this.set({ phase: 'unavailable' });
       return;
     }
-    this.session = this.deps.sessions.load();
+    this.session ??= this.deps.sessions.load();
+    // Read before `ready` is published: a subscriber that opens the panel on `ready` resumes by itself.
+    const openedEarly = this.state.open;
+    this.set({ phase: 'ready', config, locale: pickLocale(this.deps.localeOverride, this.deps.browserLanguage, config.locale) });
+    if (openedEarly && this.state.open) await this.resume();
   }
 
   async setOpen(open: boolean): Promise<void> {
     if (open === this.state.open) return;
     this.set({ open, error: null });
-    if (!open) {
-      this.stopStream();
-      return;
-    }
-    if (this.session) {
-      await this.catchUp();
-      this.startStream();
-    }
+    if (open) await this.resume();
+    else this.stopStream();
   }
 
   async send(raw: string): Promise<void> {
@@ -136,15 +152,18 @@ export class ChatStore {
       return;
     }
     this.set({ sending: true, error: null });
+    const statusVersion = this.statusVersion;
     try {
-      const result = await this.withSession((s) => this.deps.api.sendMessage(s, text, this.state.locale));
+      const { session, result } = await this.withSession((s) => this.deps.api.sendMessage(s, text, this.state.locale));
+      if (session !== this.session) return;
       this.merge(result.messages);
-      this.set({ status: result.status });
-      this.startStream();
+      this.applyStatus(result.status, statusVersion);
     } catch (error) {
       this.set({ error: errorKey(error) });
     } finally {
       this.set({ sending: false });
+      // Also after a failure: the server may have stored the turn, and the stream's catch-up will show it.
+      this.startStream();
     }
   }
 
@@ -161,6 +180,7 @@ export class ChatStore {
   }
 
   async submitContact(input: ContactInput): Promise<void> {
+    if (this.state.contact === 'sending') return;
     const clean: ContactInput = {};
     for (const key of ['name', 'email', 'phone', 'note'] as const) {
       const value = input[key]?.trim();
@@ -172,48 +192,69 @@ export class ChatStore {
     }
     this.set({ contact: 'sending', error: null });
     try {
-      await this.withSession((s) => this.deps.api.sendContact(s, clean));
-      this.set({ contact: 'sent' });
-      this.startStream();
+      const { session } = await this.withSession((s) => this.deps.api.sendContact(s, clean));
+      if (session === this.session) this.set({ contact: 'sent' });
     } catch (error) {
       this.set({ contact: 'open', error: error instanceof ApiError && error.status === 422 ? 'errorContact' : errorKey(error) });
+    } finally {
+      this.startStream();
     }
   }
 
+  /** Final: the store stops streaming and never changes state or notifies again. */
   destroy(): void {
-    this.stopStream();
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.streamAbort?.abort();
+    this.streamAbort = null;
     this.listeners.clear();
   }
 
-  /** Runs `fn` with a session (creating one if needed); a gone stored session is replaced once. */
-  private async withSession<T>(fn: (session: StoredSession) => Promise<T>): Promise<T> {
-    const hadSession = this.session !== null;
-    const session = this.session ?? (await this.createSession());
+  private async resume(): Promise<void> {
+    if (!this.session || this.destroyed) return;
+    await this.catchUp();
+    this.startStream();
+  }
+
+  /**
+   * Runs `fn` with a session (creating one if needed); a gone stored session is replaced once.
+   * Resolves with the session actually used so callers can drop results for a replaced conversation.
+   */
+  private async withSession<T>(fn: (session: StoredSession) => Promise<T>): Promise<{ session: StoredSession; result: T }> {
+    const existing = this.session;
+    const session = existing ?? (await this.createSession());
     try {
-      return await fn(session);
+      return { session, result: await fn(session) };
     } catch (error) {
-      if (!hadSession || !isGone(error)) throw error;
-      this.resetSession();
-      return fn(await this.createSession());
+      if (!existing || !isGone(error)) throw error;
+      // A concurrent request may already have replaced the gone session: reuse its replacement.
+      if (this.session === session) this.resetSession();
+      const replacement = this.session ?? (await this.createSession());
+      return { session: replacement, result: await fn(replacement) };
     }
   }
 
-  private async createSession(): Promise<StoredSession> {
-    const session = await this.deps.api.createConversation();
-    this.session = session;
-    this.deps.sessions.save(session);
-    return session;
+  /** Single-flight: concurrent callers share one createConversation request. */
+  private createSession(): Promise<StoredSession> {
+    this.creating ??= (async () => {
+      try {
+        const session = await this.deps.api.createConversation();
+        this.session = session;
+        this.deps.sessions.save(session);
+        return session;
+      } finally {
+        this.creating = null;
+      }
+    })();
+    return this.creating;
   }
 
   private resetSession(): void {
     this.stopStream();
     this.session = null;
+    this.syncedId = 0;
     this.deps.sessions.clear();
     this.set({ messages: [], status: 'bot', contact: 'hidden' });
-  }
-
-  private lastId(): number {
-    return this.state.messages.at(-1)?.id ?? 0;
   }
 
   private merge(incoming: PublicMessage[]): void {
@@ -223,15 +264,26 @@ export class ChatStore {
     this.set({ messages: [...byId.values()].sort((a, b) => a.id - b.id) });
   }
 
+  private applyStatus(status: ConversationStatus, versionAtRequest: number): void {
+    if (versionAtRequest === this.statusVersion) this.set({ status });
+  }
+
   private async catchUp(): Promise<void> {
     const session = this.session;
     if (!session) return;
+    let since = this.syncedId;
     try {
       for (;;) {
-        const page = await this.deps.api.listMessages(session, this.lastId());
-        if (this.session !== session) return;
+        const statusVersion = this.statusVersion;
+        const page = await this.deps.api.listMessages(session, since);
+        if (this.session !== session || this.destroyed) return;
         this.merge(page.messages);
-        this.set({ status: page.status });
+        this.applyStatus(page.status, statusVersion);
+        const last = page.messages.at(-1);
+        if (last) {
+          since = last.id;
+          this.syncedId = Math.max(this.syncedId, since);
+        }
         if (page.messages.length < PAGE_SIZE) return;
       }
     } catch (error) {
@@ -240,7 +292,7 @@ export class ChatStore {
   }
 
   private startStream(): void {
-    if (!this.state.open || !this.session || this.streamAbort) return;
+    if (this.destroyed || !this.state.open || !this.session || this.streamAbort) return;
     const controller = new AbortController();
     this.streamAbort = controller;
     void this.runStream(this.session, controller);
@@ -254,28 +306,34 @@ export class ChatStore {
 
   private async runStream(session: StoredSession, controller: AbortController): Promise<void> {
     const sleep = this.deps.sleep ?? abortableSleep;
+    const now = this.deps.now ?? Date.now;
+    const active = () => !controller.signal.aborted && !this.destroyed;
     let attempt = 0;
-    while (!controller.signal.aborted) {
+    while (active()) {
       this.set({ connection: attempt === 0 ? 'connecting' : 'retrying' });
+      let readyAt = null as number | null;
       try {
-        const lastId = this.lastId();
         await this.deps.stream({
           url: this.deps.api.eventsUrl(session.conversationId),
           token: session.visitorToken,
-          lastEventId: lastId > 0 ? lastId : null,
+          lastEventId: this.syncedId > 0 ? this.syncedId : null,
           signal: controller.signal,
           onEvent: (event) => {
-            if (this.onStreamEvent(event)) attempt = 0;
+            if (!active()) return;
+            if (event.event === 'ready') readyAt = now();
+            this.onStreamEvent(event);
           },
         });
       } catch (error) {
-        if (controller.signal.aborted) return;
+        if (!active()) return;
         if (isGone(error)) {
           this.resetSession();
           return;
         }
       }
-      if (controller.signal.aborted) return;
+      if (!active()) return;
+      // A server that accepts and then drops connections must not keep us retrying at the fastest rate.
+      if (readyAt !== null && now() - readyAt >= HEALTHY_MS) attempt = 0;
       const delay = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)]!;
       attempt += 1;
       this.set({ connection: 'retrying' });
@@ -283,20 +341,21 @@ export class ChatStore {
     }
   }
 
-  /** Returns true when the connection is confirmed healthy (resets the backoff). */
-  private onStreamEvent(event: SseEvent): boolean {
+  private onStreamEvent(event: SseEvent): void {
     if (event.event === 'ready') {
       this.set({ connection: 'live' });
       void this.catchUp();
-      return true;
-    }
-    if (event.event === 'message') {
+    } else if (event.event === 'message') {
       const message = parseMessage(event.data);
-      if (message) this.merge([message]);
+      if (!message) return;
+      this.merge([message]);
+      // A live stream delivers messages in id order, so everything up to this id has been seen.
+      if (message.id > this.syncedId) this.syncedId = message.id;
     } else if (event.event === 'status') {
       const status = parseStatus(event.data);
-      if (status) this.set({ status });
+      if (!status) return;
+      this.statusVersion += 1;
+      this.set({ status });
     }
-    return false;
   }
 }
