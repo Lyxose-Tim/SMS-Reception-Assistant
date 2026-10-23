@@ -173,6 +173,28 @@ describe('ChatStore: conversation lifecycle', () => {
     expect(store.getState().messages.map((m) => m.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
+  it('rolls the sync cursor back when a catch-up page fails so the next ready refetches the gap', async () => {
+    const page1 = Array.from({ length: PAGE_SIZE }, (_, i) => msg('bot', `m${i + 1}`, i + 1));
+    const page2 = deferred<MessagesResult>();
+    const api = fakeApi({
+      listMessages: vi
+        .fn()
+        .mockResolvedValueOnce({ messages: [], status: 'bot' })
+        .mockResolvedValueOnce({ messages: page1, status: 'bot' })
+        .mockReturnValueOnce(page2.promise),
+    });
+    const { store, streams } = await ready({ api, sessions: storedSession() });
+    streams[0]!.options.onEvent({ event: 'ready', data: '{}', id: null });
+    await flush();
+    expect(api.listMessages.mock.calls.map((c) => c[1])).toEqual([0, 0, 200]);
+    streams[0]!.options.onEvent({ event: 'message', data: JSON.stringify(msg('agent', 'live', 400)), id: '400' });
+    page2.reject(new ApiError(0, 'network'));
+    await flush();
+    streams[0]!.options.onEvent({ event: 'ready', data: '{}', id: null });
+    await flush();
+    expect(api.listMessages).toHaveBeenLastCalledWith(OLD, 200);
+  });
+
   it('starts a new conversation once when the stored one is gone', async () => {
     const sessions = memorySessions();
     sessions.save({ conversationId: 'gone', visitorToken: 'x' });
@@ -314,6 +336,33 @@ describe('ChatStore: conversation lifecycle', () => {
     expect(store.getState().connection).toBe('idle');
   });
 
+  it('sends no request when destroyed while the conversation is being created', async () => {
+    const created = deferred<typeof C1>();
+    const api = fakeApi({ createConversation: vi.fn().mockReturnValue(created.promise) });
+    const { store, streams } = await ready({ api });
+    const sending = store.send('hi');
+    await flush();
+    store.destroy();
+    created.resolve(C1);
+    await sending;
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(streams).toHaveLength(0);
+  });
+
+  it('creates a conversation on a later send after createConversation threw synchronously', async () => {
+    const api = fakeApi();
+    api.createConversation.mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    const { store } = await ready({ api });
+    await store.send('a');
+    expect(store.getState().error).toBe('errorGeneric');
+    await store.send('b');
+    expect(api.createConversation).toHaveBeenCalledTimes(2);
+    expect(api.sendMessage).toHaveBeenCalledWith(C1, 'b', 'en');
+    expect(store.getState()).toMatchObject({ error: null, sending: false });
+  });
+
   it('stays inert after destroy, even when a request finishes later', async () => {
     const reply = deferred<MessagesResult>();
     const api = fakeApi({ sendMessage: vi.fn().mockReturnValue(reply.promise) });
@@ -353,6 +402,20 @@ describe('ChatStore: validation and errors', () => {
     expect(store.getState()).toMatchObject({ error: 'errorRateLimited', sending: false });
     await store.send('b');
     expect(store.getState()).toMatchObject({ error: 'errorGeneric', sending: false });
+  });
+
+  it('ignores a send failure for a conversation that was reset meanwhile', async () => {
+    const reply = deferred<MessagesResult>();
+    const { api, store, streams } = await ready();
+    await store.send('hi');
+    api.sendMessage.mockReturnValueOnce(reply.promise);
+    const sending = store.send('again');
+    await flush();
+    streams[0]!.fail(new ApiError(401, 'unauthorized'));
+    await flush();
+    reply.reject(new ApiError(0, 'network'));
+    await sending;
+    expect(store.getState()).toMatchObject({ error: null, sending: false, messages: [] });
   });
 
   it('starts the stream after a failed send so a stored turn still shows up', async () => {
@@ -404,6 +467,21 @@ describe('ChatStore: contact form', () => {
     saved.resolve();
     await submitting;
     expect(store.getState()).toMatchObject({ contact: 'hidden', messages: [] });
+  });
+
+  it('ignores a contact failure for a conversation that was reset meanwhile', async () => {
+    const saved = deferred<void>();
+    const { api, store, streams } = await ready();
+    await store.send('hi');
+    api.sendContact.mockReturnValueOnce(saved.promise);
+    store.openContact();
+    const submitting = store.submitContact({ email: 'a@example.com' });
+    await flush();
+    streams[0]!.fail(new ApiError(401, 'unauthorized'));
+    await flush();
+    saved.reject(new ApiError(0, 'network'));
+    await submitting;
+    expect(store.getState()).toMatchObject({ contact: 'hidden', error: null });
   });
 
   it('returns to the form when the server rejects the details', async () => {

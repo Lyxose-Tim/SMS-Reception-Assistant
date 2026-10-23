@@ -52,6 +52,9 @@ export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+/** Thrown by `withSession` when the store was destroyed mid-request; callers treat it as a silent no-op. */
+class StoreDestroyed extends Error {}
+
 const isGone = (error: unknown) => error instanceof ApiError && (error.status === 401 || error.status === 404);
 const errorKey = (error: unknown): StringKey => (error instanceof ApiError && error.status === 429 ? 'errorRateLimited' : 'errorGeneric');
 
@@ -153,13 +156,18 @@ export class ChatStore {
     }
     this.set({ sending: true, error: null });
     const statusVersion = this.statusVersion;
+    let used: StoredSession | null = null;
     try {
-      const { session, result } = await this.withSession((s) => this.deps.api.sendMessage(s, text, this.state.locale));
+      const { session, result } = await this.withSession((s) => {
+        used = s;
+        return this.deps.api.sendMessage(s, text, this.state.locale);
+      });
       if (session !== this.session) return;
       this.merge(result.messages);
       this.applyStatus(result.status, statusVersion);
     } catch (error) {
-      this.set({ error: errorKey(error) });
+      // A failure for a destroyed store or a replaced conversation is not the visitor's current problem.
+      if (!(error instanceof StoreDestroyed) && !this.destroyed && used === this.session) this.set({ error: errorKey(error) });
     } finally {
       this.set({ sending: false });
       // Also after a failure: the server may have stored the turn, and the stream's catch-up will show it.
@@ -191,11 +199,17 @@ export class ChatStore {
       return;
     }
     this.set({ contact: 'sending', error: null });
+    let used: StoredSession | null = null;
     try {
-      const { session } = await this.withSession((s) => this.deps.api.sendContact(s, clean));
+      const { session } = await this.withSession((s) => {
+        used = s;
+        return this.deps.api.sendContact(s, clean);
+      });
       if (session === this.session) this.set({ contact: 'sent' });
     } catch (error) {
-      this.set({ contact: 'open', error: error instanceof ApiError && error.status === 422 ? 'errorContact' : errorKey(error) });
+      if (!(error instanceof StoreDestroyed) && !this.destroyed && used === this.session) {
+        this.set({ contact: 'open', error: error instanceof ApiError && error.status === 422 ? 'errorContact' : errorKey(error) });
+      }
     } finally {
       this.startStream();
     }
@@ -223,6 +237,7 @@ export class ChatStore {
   private async withSession<T>(fn: (session: StoredSession) => Promise<T>): Promise<{ session: StoredSession; result: T }> {
     const existing = this.session;
     const session = existing ?? (await this.createSession());
+    if (this.destroyed) throw new StoreDestroyed();
     try {
       return { session, result: await fn(session) };
     } catch (error) {
@@ -230,23 +245,28 @@ export class ChatStore {
       // A concurrent request may already have replaced the gone session: reuse its replacement.
       if (this.session === session) this.resetSession();
       const replacement = this.session ?? (await this.createSession());
+      if (this.destroyed) throw new StoreDestroyed();
       return { session: replacement, result: await fn(replacement) };
     }
   }
 
   /** Single-flight: concurrent callers share one createConversation request. */
   private createSession(): Promise<StoredSession> {
-    this.creating ??= (async () => {
-      try {
-        const session = await this.deps.api.createConversation();
-        this.session = session;
-        this.deps.sessions.save(session);
-        return session;
-      } finally {
-        this.creating = null;
-      }
+    if (this.creating) return this.creating;
+    const p = (async () => {
+      const session = await this.deps.api.createConversation();
+      this.session = session;
+      this.deps.sessions.save(session);
+      return session;
     })();
-    return this.creating;
+    this.creating = p;
+    // Cleared after assignment (not in the IIFE) so a synchronous throw cannot leave a rejected promise stuck.
+    void p
+      .finally(() => {
+        if (this.creating === p) this.creating = null;
+      })
+      .catch(() => {});
+    return p;
   }
 
   private resetSession(): void {
@@ -287,7 +307,10 @@ export class ChatStore {
         if (page.messages.length < PAGE_SIZE) return;
       }
     } catch (error) {
-      if (isGone(error) && this.session === session) this.resetSession();
+      if (this.session !== session) return;
+      if (isGone(error)) this.resetSession();
+      // Roll back to the last confirmed point: ids seen from the stream meanwhile must not hide the failed page's gap.
+      else this.syncedId = Math.min(this.syncedId, since);
     }
   }
 
@@ -311,6 +334,7 @@ export class ChatStore {
     let attempt = 0;
     while (active()) {
       this.set({ connection: attempt === 0 ? 'connecting' : 'retrying' });
+      // Assigned in a callback; the `as` cast stops TS narrowing it to `null` at the later `readyAt !== null` check.
       let readyAt = null as number | null;
       try {
         await this.deps.stream({
