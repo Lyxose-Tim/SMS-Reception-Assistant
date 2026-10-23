@@ -1,6 +1,6 @@
 # @reception/widget
 
-The chat bubble merchants add to their website. It is one file, `widget.js` (≈ 20 KB gzip), with all styles isolated in a Shadow DOM so it cannot clash with the site's CSS.
+The chat bubble merchants add to their website. It is one file, `widget.js` (about 14 KB gzip), with all styles isolated in a Shadow DOM so it cannot clash with the site's CSS.
 
 ## Embed on a website
 1. In the dashboard (or via the API), add the website's origin, e.g. `https://www.example.com`, to the business's **allowed origins**. `www.example.com` and `example.com` are different origins.
