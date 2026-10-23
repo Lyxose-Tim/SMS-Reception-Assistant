@@ -1,6 +1,7 @@
 import { readEmbedConfig } from './embed';
-import { mountShadow } from './mount';
+import { startWidget, whenBodyReady } from './widget';
 
-// Must be read synchronously during the initial execution of this script.
+// document.currentScript is only set during this synchronous first execution.
 const embed = readEmbedConfig(document.currentScript as HTMLScriptElement | null, document, location);
-if (embed) mountShadow(<p>Reception widget</p>);
+// Only the mounting is deferred (the snippet may be in <head>); the script lookup above is not.
+if (embed) whenBodyReady(document, () => startWidget(embed));
