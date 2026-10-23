@@ -6,6 +6,7 @@ import { onColor } from './color';
 import { Composer } from './Composer';
 import { ContactForm } from './ContactForm';
 import { MessageList } from './MessageList';
+import { useStickToBottom } from './scroll';
 import type { Translate } from './types';
 
 export function useChatState(store: ChatStore): ChatState {
@@ -66,6 +67,9 @@ function Panel({ store, state, t, onClose }: PanelProps) {
   const greeting = config.widget.greeting[state.locale] || config.widget.greeting.en;
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const focusInput = () => inputRef.current?.focus();
+  // A turn the visitor just sent (sending, or their message newest) always scrolls down.
+  const lastRole = state.messages[state.messages.length - 1]?.role;
+  const body = useStickToBottom<HTMLDivElement>([state.messages.length, state.sending], state.sending || lastRole === 'visitor');
   // The contact form is replaced by a thank-you note once sent; keep focus inside the panel.
   useEffect(() => {
     if (state.contact === 'sent') focusInput();
@@ -85,7 +89,7 @@ function Panel({ store, state, t, onClose }: PanelProps) {
           ×
         </button>
       </div>
-      <div class="rw-body">
+      <div class="rw-body" ref={body.ref} onScroll={body.onScroll}>
         <MessageList greeting={greeting} messages={state.messages} sending={state.sending} t={t} />
         {state.messages.length === 0 && config.quickQuestions.length > 0 ? (
           <div class="rw-quick">
@@ -142,7 +146,11 @@ function Panel({ store, state, t, onClose }: PanelProps) {
           />
         )}
       </div>
-      {state.connection === 'retrying' ? <p class="rw-status">{t('reconnecting')}</p> : null}
+      {state.connection === 'retrying' ? (
+        <p class="rw-status" role="status">
+          {t('reconnecting')}
+        </p>
+      ) : null}
       {state.error ? (
         <p class="rw-error" role="alert">
           {t(state.error)}

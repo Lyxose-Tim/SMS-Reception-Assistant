@@ -40,19 +40,19 @@ export function ContactForm({ store, state, t, onCancel }: Props) {
       <p class="rw-intro">{t('contactIntro')}</p>
       <label class="rw-field">
         <span>{t('name')}</span>
-        <input ref={nameRef} type="text" autocomplete="name" value={values.name} onInput={update('name')} />
+        <input ref={nameRef} type="text" autocomplete="name" maxLength={100} value={values.name} onInput={update('name')} />
       </label>
       <label class="rw-field">
         <span>{t('email')}</span>
-        <input type="email" autocomplete="email" value={values.email} onInput={update('email')} />
+        <input type="email" autocomplete="email" maxLength={200} value={values.email} onInput={update('email')} />
       </label>
       <label class="rw-field">
         <span>{t('phone')}</span>
-        <input type="tel" autocomplete="tel" value={values.phone} onInput={update('phone')} />
+        <input type="tel" autocomplete="tel" maxLength={40} value={values.phone} onInput={update('phone')} />
       </label>
       <label class="rw-field">
         <span>{t('note')}</span>
-        <textarea rows={2} value={values.note} onInput={update('note')} />
+        <textarea rows={2} maxLength={500} value={values.note} onInput={update('note')} />
       </label>
       <div class="rw-row">
         <button type="button" class="rw-link" onClick={onCancel}>

@@ -25,7 +25,7 @@ export function startWidget(
   const api = createApi(embed.apiBase, embed.slug, env.fetch);
   const store = new ChatStore({
     api,
-    sessions: createSessionStore(embed.slug),
+    sessions: createSessionStore(embed.slug, embed.apiBase),
     stream: (options) => streamEvents({ ...options, fetchImpl: env.fetch }),
     localeOverride: embed.locale,
     browserLanguage: env.language,

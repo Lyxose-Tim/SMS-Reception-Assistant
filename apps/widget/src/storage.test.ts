@@ -9,22 +9,31 @@ afterEach(() => {
 });
 
 const session = { conversationId: 'c1', visitorToken: 't1' };
+const API = 'https://chat.example.com';
+const KEY = `reception-widget:harbor-home@${API}`;
 
 describe('createSessionStore', () => {
   it('persists per business in localStorage', () => {
-    const a = createSessionStore('harbor-home');
+    const a = createSessionStore('harbor-home', API);
     a.save(session);
-    expect(createSessionStore('harbor-home').load()).toEqual(session);
-    expect(createSessionStore('other-shop').load()).toBeNull();
+    expect(localStorage.getItem(KEY)).toBe(JSON.stringify(session));
+    expect(createSessionStore('harbor-home', API).load()).toEqual(session);
+    expect(createSessionStore('other-shop', API).load()).toBeNull();
     a.clear();
-    expect(createSessionStore('harbor-home').load()).toBeNull();
+    expect(createSessionStore('harbor-home', API).load()).toBeNull();
+  });
+
+  it('never reuses a session saved for another API server', () => {
+    createSessionStore('harbor-home', 'https://staging.chat.example.com').save(session);
+    expect(createSessionStore('harbor-home', API).load()).toBeNull();
+    expect(createSessionStore('harbor-home', 'https://staging.chat.example.com').load()).toEqual(session);
   });
 
   it('ignores corrupt stored values', () => {
-    localStorage.setItem('reception-widget:harbor-home', '{"conversationId":1}');
-    expect(createSessionStore('harbor-home').load()).toBeNull();
-    localStorage.setItem('reception-widget:harbor-home', 'not json');
-    expect(createSessionStore('harbor-home').load()).toBeNull();
+    localStorage.setItem(KEY, '{"conversationId":1}');
+    expect(createSessionStore('harbor-home', API).load()).toBeNull();
+    localStorage.setItem(KEY, 'not json');
+    expect(createSessionStore('harbor-home', API).load()).toBeNull();
   });
 
   it('falls back to memory when localStorage throws (private mode, in-app browsers)', () => {
@@ -40,7 +49,7 @@ describe('createSessionStore', () => {
       },
     };
     vi.stubGlobal('localStorage', throwing);
-    const store = createSessionStore('harbor-home');
+    const store = createSessionStore('harbor-home', API);
     expect(() => store.save(session)).not.toThrow();
     expect(store.load()).toEqual(session);
     store.clear();
@@ -48,7 +57,7 @@ describe('createSessionStore', () => {
   });
 
   it('works when storage is entirely unavailable', () => {
-    const store = createSessionStore('harbor-home', () => null);
+    const store = createSessionStore('harbor-home', API, () => null);
     store.save(session);
     expect(store.load()).toEqual(session);
   });
@@ -63,11 +72,11 @@ describe('createSessionStore', () => {
       },
       removeItem,
     } as unknown as Storage;
-    const store = createSessionStore('harbor-home', () => stuck);
+    const store = createSessionStore('harbor-home', API, () => stuck);
     expect(store.load()).toEqual(old);
     const latest = { conversationId: 'c2', visitorToken: 't2' };
     store.save(latest);
     expect(store.load()).toEqual(latest);
-    expect(removeItem).toHaveBeenCalledWith('reception-widget:harbor-home');
+    expect(removeItem).toHaveBeenCalledWith(KEY);
   });
 });

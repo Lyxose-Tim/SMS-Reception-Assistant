@@ -16,6 +16,11 @@ describe('i18n', () => {
     expect(tr('zh-CN', 'send')).toBe('发送');
   });
 
+  it('has a generic message for contact details the server rejects', () => {
+    expect(tr('en', 'errorContactRejected')).toBe('Please check your details and try again.');
+    expect(tr('zh-CN', 'errorContactRejected')).toBe('请检查您填写的信息后重试。');
+  });
+
   it('asks for a human with phrases the server rules recognize', () => {
     expect(tr('en', 'talkToPersonMessage')).toMatch(/real person/);
     expect(tr('zh-CN', 'talkToPersonMessage')).toContain('人工客服');

@@ -64,16 +64,17 @@
 .rw-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rw-close { background: none; border: none; color: var(--rw-on-primary); font-size: 22px; line-height: 1; padding: 0 4px; }
 
+/* The panel's only scroll container: messages, chips, notices and the contact form scroll together. */
 .rw-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
 }
 .rw-messages {
   flex: 1 0 140px;
-  overflow-y: auto;
   padding: 12px;
   display: flex;
   flex-direction: column;

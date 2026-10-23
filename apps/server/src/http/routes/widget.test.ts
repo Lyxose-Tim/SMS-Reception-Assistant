@@ -69,6 +69,68 @@ describe('widget config and CORS', () => {
   });
 });
 
+describe('widget 404s are readable cross-origin', () => {
+  const ELSEWHERE = 'https://elsewhere.example';
+  const unknownConversation = () => `/api/widget/c/${crypto.randomUUID()}/messages`;
+
+  function expectPublicCors(res: Response) {
+    expect(res.headers.get('access-control-allow-origin')).toBe(ELSEWHERE);
+    expect(res.headers.get('access-control-allow-methods')).toBe('GET, POST, OPTIONS');
+    expect(res.headers.get('access-control-allow-headers')).toBe('Content-Type, Authorization, Last-Event-ID');
+    expect(res.headers.get('access-control-max-age')).toBe('600');
+    expect(res.headers.get('access-control-allow-credentials')).toBeNull();
+    expect(res.headers.get('vary')).toContain('Origin');
+  }
+
+  it('answers the preflight for an unknown conversation with 204 and CORS', async () => {
+    const res = await h.request(unknownConversation(), {
+      method: 'OPTIONS',
+      headers: { origin: ELSEWHERE, 'access-control-request-method': 'POST' },
+    });
+    expect(res.status).toBe(204);
+    expectPublicCors(res);
+  });
+
+  it('returns a CORS-readable 404 for an unknown conversation', async () => {
+    const res = await h.request(unknownConversation(), {
+      method: 'POST',
+      headers: { origin: ELSEWHERE, authorization: 'Bearer whatever', 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'hi' }),
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'not_found' });
+    expectPublicCors(res);
+  });
+
+  it('returns a CORS-readable 404 for an unknown business slug', async () => {
+    const res = await h.request('/api/widget/b/nope/config', { headers: { origin: ELSEWHERE } });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'not_found' });
+    expectPublicCors(res);
+  });
+
+  it('omits CORS headers on a 404 without an Origin header', async () => {
+    const res = await h.request(unknownConversation());
+    expect(res.status).toBe(404);
+    expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    expect(res.headers.get('vary')).toContain('Origin');
+  });
+
+  it('still applies the per-business allow-list to a known conversation', async () => {
+    const chat = await startChat();
+    const res = await h.request(`/api/widget/c/${chat.conversationId}/messages`, {
+      headers: { origin: ELSEWHERE, authorization: `Bearer ${chat.visitorToken}` },
+    });
+    expect(res.status).toBe(403);
+    expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    const preflight = await h.request(`/api/widget/c/${chat.conversationId}/messages`, {
+      method: 'OPTIONS',
+      headers: { origin: ELSEWHERE, 'access-control-request-method': 'POST' },
+    });
+    expect(preflight.status).toBe(403);
+  });
+});
+
 describe('widget conversations', () => {
   it('runs a conversation with the visitor token', async () => {
     const chat = await startChat();

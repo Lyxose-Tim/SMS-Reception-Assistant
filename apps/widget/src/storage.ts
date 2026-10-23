@@ -18,9 +18,12 @@ export function isSession(value: unknown): value is StoredSession {
   return typeof v?.conversationId === 'string' && typeof v.visitorToken === 'string' && v.conversationId !== '' && v.visitorToken !== '';
 }
 
-/** localStorage can be missing or throw (private mode, in-app WebViews): fall back to memory and keep working. */
-export function createSessionStore(slug: string, getStorage: () => Storage | null = defaultStorage): SessionStore {
-  const key = `reception-widget:${slug}`;
+/**
+ * localStorage can be missing or throw (private mode, in-app WebViews): fall back to memory and keep working.
+ * The key includes the API base so switching servers (staging → production) never reuses a foreign session.
+ */
+export function createSessionStore(slug: string, apiBase: string, getStorage: () => Storage | null = defaultStorage): SessionStore {
+  const key = `reception-widget:${slug}@${apiBase}`;
   let memory: StoredSession | null = null;
   const storage = (): Storage | null => {
     try {

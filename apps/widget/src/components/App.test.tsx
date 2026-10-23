@@ -241,7 +241,8 @@ describe('App focus and accessibility', () => {
   it('auto-scrolls only when near the bottom or for the visitor own message', async () => {
     const ctx = await setup();
     await openPanel(ctx);
-    const list = ctx.root.querySelector('.rw-messages') as HTMLElement;
+    // .rw-body is the panel's single scroll container (messages, chips, notices and the contact form scroll together).
+    const list = ctx.root.querySelector('.rw-body') as HTMLElement;
     Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 1000 });
     Object.defineProperty(list, 'clientHeight', { configurable: true, value: 400 });
     await ctx.user.type(ctx.q.getByLabelText('Message'), 'hello{Enter}');
@@ -267,6 +268,53 @@ describe('App focus and accessibility', () => {
     await ctx.user.type(ctx.q.getByLabelText('Message'), 'mine{Enter}');
     await ctx.q.findByText('Echo: mine');
     await waitFor(() => expect(list.scrollTop).toBe(1000));
+  });
+});
+
+describe('App contact form', () => {
+  async function openContactForm(ctx: Awaited<ReturnType<typeof setup>>) {
+    await openPanel(ctx);
+    await ctx.user.click(ctx.q.getByRole('button', { name: 'Talk to a person' }));
+    await waitFor(() => expect(ctx.streams).toHaveLength(1));
+    ctx.streams[0]!.options.onEvent({ event: 'status', data: '{"status":"human"}', id: null });
+    await ctx.user.click(await ctx.q.findByRole('button', { name: 'Leave your contact details' }));
+  }
+
+  it('limits each field to the server maximum', async () => {
+    const ctx = await setup();
+    await openContactForm(ctx);
+    expect(ctx.q.getByLabelText('Name').getAttribute('maxlength')).toBe('100');
+    expect(ctx.q.getByLabelText('Email').getAttribute('maxlength')).toBe('200');
+    expect(ctx.q.getByLabelText('Phone').getAttribute('maxlength')).toBe('40');
+    expect(ctx.q.getByLabelText('Message (optional)').getAttribute('maxlength')).toBe('500');
+  });
+
+  it('asks for an email or phone when both are missing', async () => {
+    const ctx = await setup();
+    await openContactForm(ctx);
+    await ctx.user.click(ctx.q.getByRole('button', { name: 'Send details' }));
+    expect((await ctx.q.findByRole('alert')).textContent).toBe('Please enter a valid email address or phone number.');
+    expect(ctx.api.sendContact).not.toHaveBeenCalled();
+  });
+
+  it('shows a generic check-your-details message when the server rejects the details', async () => {
+    const ctx = await setup(fakeApi({ sendContact: vi.fn().mockRejectedValue(new ApiError(422, 'validation')) }));
+    await openContactForm(ctx);
+    await ctx.user.type(ctx.q.getByLabelText('Phone'), '123');
+    await ctx.user.click(ctx.q.getByRole('button', { name: 'Send details' }));
+    expect((await ctx.q.findByRole('alert')).textContent).toBe('Please check your details and try again.');
+  });
+});
+
+describe('App connection status', () => {
+  it('announces reconnecting as a status', async () => {
+    const ctx = await setup();
+    await openPanel(ctx);
+    await ctx.user.type(ctx.q.getByLabelText('Message'), 'hi{Enter}');
+    await waitFor(() => expect(ctx.streams).toHaveLength(1));
+    ctx.streams[0]!.fail(new ApiError(0, 'network'));
+    const status = await ctx.q.findByText('Reconnecting…');
+    expect(status.getAttribute('role')).toBe('status');
   });
 });
 

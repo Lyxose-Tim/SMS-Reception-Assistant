@@ -18,6 +18,8 @@ export function mountShadow(content: ComponentChild, doc: Document = document): 
   }
   const host = doc.createElement('div');
   host.id = HOST_ID;
+  // Inline !important beats host-page author rules (even !important ones) that match the host div, e.g. `div { transform: ... }`.
+  host.style.setProperty('all', 'initial', 'important');
   const root = host.attachShadow({ mode: 'open' });
   const style = doc.createElement('style');
   style.textContent = css;

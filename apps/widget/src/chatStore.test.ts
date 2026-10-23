@@ -261,6 +261,31 @@ describe('ChatStore: conversation lifecycle', () => {
     expect(store.getState().connection).toBe('idle');
   });
 
+  it('resets on a 404 catch-up when opened with a stored session, and the next send creates a new conversation', async () => {
+    const api = fakeApi({ listMessages: vi.fn().mockRejectedValueOnce(new ApiError(404, 'not_found')) });
+    const { sessions, store, streams } = await ready({ api, sessions: storedSession() });
+    expect(api.listMessages).toHaveBeenCalledWith(OLD, 0);
+    expect(sessions.load()).toBeNull();
+    expect(streams).toHaveLength(0);
+    await store.send('hi');
+    expect(api.createConversation).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0]![0]).toEqual(C1);
+    expect(sessions.load()).toEqual(C1);
+  });
+
+  it('resets on a 404 from the stream, and the next send creates a new conversation', async () => {
+    const { api, sessions, store, streams } = await ready({ sessions: storedSession() });
+    expect(streams).toHaveLength(1);
+    streams[0]!.fail(new ApiError(404, 'not_found'));
+    await flush();
+    expect(sessions.load()).toBeNull();
+    expect(store.getState().connection).toBe('idle');
+    await store.send('hi');
+    expect(api.createConversation).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0]![0]).toEqual(C1);
+    expect(sessions.load()).toEqual(C1);
+  });
+
   it('reconnects with backoff and resets the backoff only after a healthy connection', async () => {
     let clock = 0;
     const { store, streams, sleep } = await ready({ now: () => clock });
@@ -489,7 +514,7 @@ describe('ChatStore: contact form', () => {
     const { store, streams } = await ready({ api });
     store.openContact();
     await store.submitContact({ phone: '123' });
-    expect(store.getState()).toMatchObject({ contact: 'open', error: 'errorContact' });
+    expect(store.getState()).toMatchObject({ contact: 'open', error: 'errorContactRejected' });
     expect(streams).toHaveLength(1);
   });
 });

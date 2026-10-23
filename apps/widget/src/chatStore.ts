@@ -208,7 +208,7 @@ export class ChatStore {
       if (session === this.session) this.set({ contact: 'sent' });
     } catch (error) {
       if (!(error instanceof StoreDestroyed) && !this.destroyed && used === this.session) {
-        this.set({ contact: 'open', error: error instanceof ApiError && error.status === 422 ? 'errorContact' : errorKey(error) });
+        this.set({ contact: 'open', error: error instanceof ApiError && error.status === 422 ? 'errorContactRejected' : errorKey(error) });
       }
     } finally {
       this.startStream();

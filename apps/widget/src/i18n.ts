@@ -23,6 +23,7 @@ const en = {
   errorRateLimited: 'You are sending messages too quickly. Please wait a moment.',
   errorTooLong: 'Your message is too long (1000 characters max).',
   errorContact: 'Please enter a valid email address or phone number.',
+  errorContactRejected: 'Please check your details and try again.',
   reconnecting: 'Reconnecting…',
 } as const;
 
@@ -51,6 +52,7 @@ const zh: Record<StringKey, string> = {
   errorRateLimited: '消息发送太频繁，请稍候再试。',
   errorTooLong: '消息太长了（最多 1000 个字符）。',
   errorContact: '请填写有效的邮箱或电话号码。',
+  errorContactRejected: '请检查您填写的信息后重试。',
   reconnecting: '正在重新连接…',
 };
 

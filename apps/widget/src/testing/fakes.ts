@@ -42,7 +42,7 @@ export function fakeApi(overrides: Partial<WidgetApi> = {}) {
 }
 
 export function memorySessions(): SessionStore {
-  return createSessionStore('test', () => null);
+  return createSessionStore('test', 'https://chat.example', () => null);
 }
 
 /** Stream stand-in that stays open until aborted; tests drive it via `calls`. */
