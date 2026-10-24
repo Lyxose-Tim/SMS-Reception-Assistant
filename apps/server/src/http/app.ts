@@ -4,6 +4,7 @@ import type { AppDeps } from './deps';
 import { handleError } from './errors';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
+import { staticRoutes } from './routes/static';
 import { widgetRoutes } from './routes/widget';
 import type { AppEnv } from './types';
 
@@ -17,5 +18,6 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/api/auth', authRoutes(deps));
   app.route('/api/admin', adminRoutes(deps));
   app.route('/api/widget', widgetRoutes(deps));
+  app.route('/', staticRoutes(deps));
   return app;
 }

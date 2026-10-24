@@ -14,6 +14,7 @@ Create a real business owner instead of the demo: `npm run cli -w @reception/ser
 
 ## API overview
 - Widget (public, CORS per business `widget.allowedOrigins`): `/api/widget/b/:slug/config`, `POST /api/widget/b/:slug/conversations`, `/api/widget/c/:id/messages` (GET/POST, `Authorization: Bearer <visitorToken>`), `POST /api/widget/c/:id/contact`, `GET /api/widget/c/:id/events` (SSE).
+- `GET /widget.js` (the built chat widget, see `apps/widget/README.md`) and `GET /demo?business=<slug>` (fictional demo page).
 - Auth: `POST /api/auth/login|logout`, `GET /api/auth/me` (HttpOnly cookie; state-changing calls must send `Origin: PUBLIC_ORIGIN`).
 - Admin: `/api/admin/conversations…`, `/business`, `/faqs`, `/bookings…`, `/ai`, `/events` (SSE).
   - All admin timestamps (responses and SSE events) are epoch milliseconds; responses are DTOs, never raw rows.

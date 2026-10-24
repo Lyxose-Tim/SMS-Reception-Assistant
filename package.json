@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "dev:server": "npm run dev -w @reception/server",
     "start:server": "npm run start -w @reception/server",
-    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p apps/server/tsconfig.json"
+    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p apps/server/tsconfig.json && tsc -p apps/widget/tsconfig.json",
+    "build:widget": "npm run build -w @reception/widget"
   },
   "engines": {
     "node": ">=22.9"

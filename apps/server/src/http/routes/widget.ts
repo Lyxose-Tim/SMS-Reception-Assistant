@@ -1,4 +1,4 @@
-import { Hono, type MiddlewareHandler } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 import { parseOrThrow } from '../../domain/validation';
 import { getBusinessById, getBusinessBySlug, listFaqs, type BusinessRow } from '../../repos/business';
@@ -16,6 +16,13 @@ function originAllowed(deps: AppDeps, business: BusinessRow, origin: string): bo
   return origin === deps.env.PUBLIC_ORIGIN || business.widget.allowedOrigins.includes(origin);
 }
 
+function setCorsHeaders(c: Context<AppEnv>, origin: string): void {
+  c.header('Access-Control-Allow-Origin', origin);
+  c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Last-Event-ID');
+  c.header('Access-Control-Max-Age', '600');
+}
+
 /** Per-business CORS: the widget may only be embedded on the merchant's allowed origins. */
 export function corsGuard(deps: AppDeps): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
@@ -23,20 +30,29 @@ export function corsGuard(deps: AppDeps): MiddlewareHandler<AppEnv> {
     const origin = c.req.header('origin');
     if (origin) {
       if (!originAllowed(deps, c.get('business'), origin)) return c.json({ error: 'origin_not_allowed' }, 403);
-      c.header('Access-Control-Allow-Origin', origin);
-      c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Last-Event-ID');
-      c.header('Access-Control-Max-Age', '600');
+      setCorsHeaders(c, origin);
     }
     if (c.req.method === 'OPTIONS') return c.body(null, 204);
     return next();
   };
 }
 
+/**
+ * Unknown slug/conversation: public, credential-less CORS so a widget on any site can read the 404 and reset its session.
+ * Safe because the 404 reveals nothing (ids are random UUIDs, no cookies); known conversations still go through `corsGuard`.
+ */
+function publicNotFound(c: Context<AppEnv>) {
+  c.header('Vary', 'Origin');
+  const origin = c.req.header('origin');
+  if (origin) setCorsHeaders(c, origin);
+  if (c.req.method === 'OPTIONS') return c.body(null, 204);
+  return c.json({ error: 'not_found' }, 404);
+}
+
 function loadBusinessBySlug(deps: AppDeps): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const business = await getBusinessBySlug(deps.db, c.req.param('slug') ?? '');
-    if (!business) return c.json({ error: 'not_found' }, 404);
+    if (!business) return publicNotFound(c);
     c.set('business', business);
     return next();
   };
@@ -46,7 +62,7 @@ function loadConversation(deps: AppDeps): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const conversation = await getConversation(deps.db, c.req.param('id') ?? '');
     const business = conversation ? await getBusinessById(deps.db, conversation.businessId) : null;
-    if (!conversation || !business) return c.json({ error: 'not_found' }, 404);
+    if (!conversation || !business) return publicNotFound(c);
     c.set('conversation', conversation);
     c.set('business', business);
     return next();
